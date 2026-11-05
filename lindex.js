@@ -1288,7 +1288,6 @@ client.on("interactionCreate", async (interaction) => {
         .addOptions([
           { label: "Overview", description: "Main directory page", emoji: "📖", value: "overview" },
           { label: "General & Server Info", description: "IP, server rules, and official links", emoji: "🌐", value: "info" },
-          { label: "Store & Economy", description: "Ranks, spawners, payments, and tickets", emoji: "🛒", value: "store" },
           { label: "Levels & Invites", description: "Level cards, invite stats, and leaderboards", emoji: "📊", value: "stats" },
           { label: "Mini-Games & Fun", description: "Snake, TicTacToe, Wordle, and Guess", emoji: "🎮", value: "games" },
           { label: "Staff & Moderation", description: "Warns, mutes, bans, and giveaways", emoji: "🛡️", value: "mod" }
@@ -1927,7 +1926,7 @@ Your support helps keep the server alive, balanced, and growing for the entire c
         .addOptions([
           {
             label: "Purchase Support",
-            description: "Buy ranks, crates, spawners",
+            description: "Buy owo, oyo etc purhcase related",
             emoji: "<a:moneyyyy:1507792459974054118>",
             value: "purchase"
           },
