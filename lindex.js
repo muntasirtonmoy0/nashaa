@@ -3343,12 +3343,12 @@ client.on("guildMemberUpdate", async (oldMember, newMember) => {
 client.on("voiceStateUpdate", async (oldState, newState) => {
   const { member, guild } = newState;
 
-  // 1. User joins the "Join to Create" channel
+  // 1. User joins the "Join to Create" voice channel
   if (newState.channelId === JOIN_TO_CREATE_CHANNEL_ID) {
     try {
       const parentCategory = newState.channel.parent;
 
-      // Creates the voice channel right under the creator channel
+      // Create temporary voice channel
       const tempChannel = await guild.channels.create({
         name: `🔊・${member.displayName}'s VC`,
         type: ChannelType.GuildVoice,
@@ -3363,6 +3363,7 @@ client.on("voiceStateUpdate", async (oldState, newState) => {
             id: member.id,
             allow: [
               PermissionsBitField.Flags.Connect,
+              PermissionsBitField.Flags.ViewChannel,
               PermissionsBitField.Flags.ManageChannels,
               PermissionsBitField.Flags.MoveMembers,
               PermissionsBitField.Flags.MuteMembers
@@ -3371,21 +3372,75 @@ client.on("voiceStateUpdate", async (oldState, newState) => {
         ]
       });
 
-      // Track channel ID
+      // Track channel and assign ownership
       activeTempVoiceChannels.add(tempChannel.id);
+      tempVoiceOwners.set(tempChannel.id, member.id);
 
-      // Move member into their newly created temporary channel
+      // Move creator into the newly created channel
       await newState.setChannel(tempChannel);
+
+      // Build Voice Control Panel Embed (Matching Video Interface)
+      const panelEmbed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setTitle("⚙️ Welcome to your own temporary voice channel")
+        .setDescription(
+          "Control your channel using the menus below\n" +
+          "• Use the dropdowns to manage settings and permissions\n" +
+          "• Only the channel owner can adjust these controls\n" +
+          "• If the owner leaves, anyone inside can use **Claim** to take ownership!\n\n" +
+          `👑 **Channel Owner:** ${member} (\`${member.displayName}\`)`
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+        .setFooter({ text: "VoiceMaster • Temp Voice Control" });
+
+      // Dropdown 1: Channel Settings
+      const settingsRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId("vc_settings_menu")
+          .setPlaceholder("Change channel settings")
+          .addOptions([
+            { label: "Name", description: "Change the channel name", emoji: "🪪", value: "vc_name" },
+            { label: "Limit", description: "Change the channel user limit", emoji: "👥", value: "vc_limit" },
+            { label: "Status", description: "Change the channel status text", emoji: "💬", value: "vc_status" },
+            { label: "Bitrate", description: "Change the channel voice bitrate", emoji: "🎚️", value: "vc_bitrate" },
+            { label: "Claim", description: "Claim ownership of the channel", emoji: "👑", value: "vc_claim" }
+          ])
+      );
+
+      // Dropdown 2: Channel Permissions
+      const permissionsRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId("vc_permissions_menu")
+          .setPlaceholder("Change channel permissions")
+          .addOptions([
+            { label: "Lock", description: "Lock the channel for everyone", emoji: "🔒", value: "vc_lock" },
+            { label: "Unlock", description: "Unlock the channel for everyone", emoji: "🔓", value: "vc_unlock" },
+            { label: "Ghost", description: "Make your channel invisible", emoji: "👻", value: "vc_ghost" },
+            { label: "Unghost", description: "Make your channel visible", emoji: "👁️", value: "vc_unghost" },
+            { label: "Permit", description: "Permit a user/friend to access", emoji: "✅", value: "vc_permit" },
+            { label: "Reject", description: "Disconnect & block a user", emoji: "🚫", value: "vc_reject" },
+            { label: "Transfer", description: "Transfer ownership to another user", emoji: "👑", value: "vc_transfer" }
+          ])
+      );
+
+      // Send panel inside the newly generated voice channel's text chat
+      await tempChannel.send({
+        content: `${member}`,
+        embeds: [panelEmbed],
+        components: [settingsRow, permissionsRow]
+      }).catch(() => {});
+
     } catch (err) {
-      console.error("Error creating temporary voice channel:", err);
+      console.error("Error creating temp voice channel:", err);
     }
   }
 
-  // 2. Member leaves a temporary voice channel -> Delete if empty
+  // 2. Member leaves temporary voice channel -> Auto delete if empty
   if (oldState.channelId && activeTempVoiceChannels.has(oldState.channelId)) {
     const channel = oldState.channel;
     if (channel && channel.members.size === 0) {
       activeTempVoiceChannels.delete(channel.id);
+      tempVoiceOwners.delete(channel.id);
       await channel.delete().catch(() => {});
     }
   }
