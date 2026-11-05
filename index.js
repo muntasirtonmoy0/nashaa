@@ -46,6 +46,7 @@ const INVITE_LOG_CHANNEL_ID = "YOUR_INVITE_LOG_CHANNEL_ID";
 const TICKET_LOG_CHANNEL_ID = "YOUR_TICKET_TRANSCRIPTS_CHANNEL_ID";
 const JOIN_TO_CREATE_CHANNEL_ID = "YOUR_JOIN_TO_CREATE_VOICE_CHANNEL_ID";
 const activeTempVoiceChannels = new Set();
+const tempVoiceOwners = new Map();
 
 /* =========================================================
    3. AUTOMOD & AUDIT LOG CONFIGURATION
