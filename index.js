@@ -277,6 +277,94 @@ function saveInvites() {
   fs.writeFileSync("./invites.json", JSON.stringify(invites, null, 2));
 }
 
+/* ===================================================
+   MESSAGES STATS & AFK SYSTEM STORAGE
+=================================================== */
+let messageStats = loadJSON("./messages.json", {});
+let afkData = loadJSON("./afk.json", {});
+
+function saveMessageStats() {
+  fs.writeFileSync("./messages.json", JSON.stringify(messageStats, null, 2));
+}
+
+function saveAfkData() {
+  fs.writeFileSync("./afk.json", JSON.stringify(afkData, null, 2));
+}
+
+// Automatically tracks and resets daily, weekly, and monthly message counters
+function trackUserMessage(userId) {
+  const now = new Date();
+  if (!messageStats[userId]) {
+    messageStats[userId] = {
+      allTime: 0,
+      today: 0,
+      weekly: 0,
+      monthly: 0,
+      lastDaily: now.toDateString(),
+      lastWeekly: getWeekNumber(now),
+      lastMonthly: now.getMonth()
+    };
+  }
+
+  const u = messageStats[userId];
+
+  // Daily reset check
+  if (u.lastDaily !== now.toDateString()) {
+    u.today = 0;
+    u.lastDaily = now.toDateString();
+  }
+
+  // Weekly reset check
+  if (u.lastWeekly !== getWeekNumber(now)) {
+    u.weekly = 0;
+    u.lastWeekly = getWeekNumber(now);
+  }
+
+  // Monthly reset check
+  if (u.lastMonthly !== now.getMonth()) {
+    u.monthly = 0;
+    u.lastMonthly = now.getMonth();
+  }
+
+  u.allTime = (u.allTime || 0) + 1;
+  u.today = (u.today || 0) + 1;
+  u.weekly = (u.weekly || 0) + 1;
+  u.monthly = (u.monthly || 0) + 1;
+
+  saveMessageStats();
+}
+
+function getWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
+// Calculate countdown to next daily/weekly/monthly resets
+function getResetTimers() {
+  const now = new Date();
+
+  // Next daily: midnight
+  const tomorrow = new Date(now);
+  tomorrow.setHours(24, 0, 0, 0);
+  const hoursLeftDaily = Math.max(0, Math.round((tomorrow - now) / 3600000));
+
+  // Next weekly: Sunday midnight
+  const endOfWeek = new Date(now);
+  const day = now.getDay();
+  const diff = (7 - day) % 7 || 7;
+  endOfWeek.setDate(now.getDate() + diff);
+  endOfWeek.setHours(0, 0, 0, 0);
+  const daysLeftWeekly = Math.max(0, Math.ceil((endOfWeek - now) / 86400000));
+
+  // Next monthly: 1st of next month
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const daysLeftMonthly = Math.max(0, Math.ceil((nextMonth - now) / 86400000));
+
+  return { daily: `${hoursLeftDaily}h`, weekly: `${daysLeftWeekly}d`, monthly: `${daysLeftMonthly}d` };
+}
+
 /* =========================================================
    8. CLIENT SETUP
 ========================================================= */
