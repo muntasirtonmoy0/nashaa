@@ -30,21 +30,21 @@ const ms = require("ms");
    IMAGES
 ========================= */
 const BANNER =
-  "https://cdn.discordapp.com/attachments/1508843787064185103/1509148139024547891/1000016350-ezremove.gif?ex=6a181f3a&is=6a16cdba&hm=e14c4ae7628e82a918334f96f5f5db5401a2f474801519145a2194f0bd0ae53e&";
+  "BANNER LINK";
 
 const THUMBNAIL =
-  "https://cdn.discordapp.com/attachments/1508843787064185103/1509148049375498260/1000016387-ezremove.gif?ex=6a181f25&is=6a16cda5&hm=f50b3cd0602727d2db53802bfb335d2e24757b2f79f355ea07f7668b801ed60f&";
+  "THUMBNAIL LINK";
 
 /* =========================
    CHANNEL IDS
 ========================= */
-const WELCOME_CHANNEL_ID = "1504121883841270032";
-const GOODBYE_CHANNEL_ID = "1504122077966368919";
-const BOOST_CHANNEL_ID = "1509893252168421556";
-const LEVEL_CHANNEL_ID = "1506091937726333081";
-const INVITE_LOG_CHANNEL_ID = "1513142091860017152";
-const TICKET_LOG_CHANNEL_ID = "1549056747132551330";
-const JOIN_TO_CREATE_CHANNEL_ID = "1549457451844378705";
+const WELCOME_CHANNEL_ID = "WELCOME_CHANNEL_ID";
+const GOODBYE_CHANNEL_ID = "GOODBYE_CHANNEL_ID";
+const BOOST_CHANNEL_ID = "BOOST_CHANNEL_ID";
+const LEVEL_CHANNEL_ID = "LEVEL_CHANNEL_ID";
+const INVITE_LOG_CHANNEL_ID = "INVITE_LOG_CHANNEL_ID";
+const TICKET_LOG_CHANNEL_ID = "TICKET_LOG_CHANNEL_ID";
+const JOIN_TO_CREATE_CHANNEL_ID = "JOIN_TO_CREATE_CHANNEL_ID";
 const activeTempVoiceChannels = new Set();
 const tempVoiceOwners = new Map();
 
@@ -52,7 +52,7 @@ const tempVoiceOwners = new Map();
    AUTOMOD & AUDIT LOG CONFIG
 ========================= */
 // Channel where all security & audit embeds will be sent
-const AUDIT_LOG_CHANNEL_ID = "1560522955358871592"; 
+const AUDIT_LOG_CHANNEL_ID = "AUDIT_LOG_CHANNEL_ID"; 
 
 // If you want to restrict automod to ONE specific channel, put its ID here.
 // Set to null to protect all channels across the server.
@@ -116,7 +116,7 @@ function findMatchedTerm(content, wordList) {
 /* =========================
    ANTI-NUKE CONFIGURATION
 ========================= */
-const ANTI_NUKE_LOG_CHANNEL_ID = "1551051405639426168"; // Set to your staff log or emergency alert channel
+const ANTI_NUKE_LOG_CHANNEL_ID = "ANTI_NUKE_LOG_CHANNEL_ID"; // Set to your staff log or emergency alert channel
 const nukeTracker = new Map();
 
 // Limits allowed within a 10-second rolling window
@@ -191,16 +191,16 @@ async function triggerNukeDefense(guild, executor, actionName, count) {
 /* =========================
    MODERATION SYSTEM
 ========================= */
-const OWNER_ID = "1354755206528630894";
+const OWNER_ID = "OWNER_ID";
 
 const STAFF_USER_IDS = [
-  "1504160922376081480",
-  "1548718895173730407",
-  "1529537332112261344",
-  "1272908975813165114",
-  "1500677494934737050",
-  "1306625186354692228",
-  "1427534146019921981"
+  "STAFF_USER_IDS",
+  "STAFF_USER_IDS",
+  "STAFF_USER_IDS",
+  "STAFF_USER_IDS",
+  "STAFF_USER_IDS",
+  "STAFF_USER_IDS",
+  "STAFF_USER_IDS"
 ];
 
 function isStaff(member) {
@@ -293,6 +293,21 @@ function saveInvites() {
 /* ===================================================
    MESSAGES STATS & AFK SYSTEM STORAGE
 =================================================== */
+function loadJSON(filePath, defaultData) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify(defaultData, null, 2));
+      return defaultData;
+    }
+    const raw = fs.readFileSync(filePath, "utf8").trim();
+    return raw ? JSON.parse(raw) : defaultData;
+  } catch (err) {
+    console.warn(`[RECOVERY] Corrupted JSON in ${filePath}. Resetting.`);
+    fs.writeFileSync(filePath, JSON.stringify(defaultData, null, 2));
+    return defaultData;
+  }
+}
+
 let messageStats = loadJSON("./messages.json", {});
 let afkData = loadJSON("./afk.json", {});
 
