@@ -677,179 +677,88 @@ client.on("messageCreate", async (message) => {
   const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
   const bypass = isStaff(member);
 
-  if (MONITORED_CHANNEL_ID && message.channel.id !== MONITORED_CHANNEL_ID) {
-    return;
-  }
+  /* --- 1. TRACK MESSAGE STATS --- */
+  trackUserMessage(message.author.id);
 
-  /* --- 1. SERVER INVITE / PROMOTION FILTER --- */
-  if (!bypass && DISCORD_INVITE_REGEX.test(message.content)) {
-    await message.delete().catch(() => {});
-    issueAutoWarning(message.author.id, "Unauthorized server invite or promotion link");
+  /* --- 2. AFK SYSTEM: CLEAR AFK UPON TALKING --- */
+  if (afkData[message.author.id]?.isAfk) {
+    const data = afkData[message.author.id];
+    delete afkData[message.author.id];
+    saveAfkData();
 
-    const alertMsg = await message.channel.send(
-      `⚠️ ${message.author}, **server invites and self-promotions are not allowed!** A formal warning has been issued.`
-    ).catch(() => {});
-    setTimeout(() => alertMsg?.delete().catch(() => {}), 6000);
+    const welcomeMsg = await message.reply(`👋 Welcome back ${message.author}, I have removed your AFK status.`).catch(() => {});
+    setTimeout(() => welcomeMsg?.delete().catch(() => {}), 6000);
 
-    const auditChan = message.guild.channels.cache.get(AUDIT_LOG_CHANNEL_ID);
-    if (auditChan) {
-      const logEmbed = new EmbedBuilder()
-        .setColor(0xED4245)
-        .setTitle("🚨 AutoMod • Server Promotion Blocked")
-        .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-        .addFields(
-          { name: "👤 Offender", value: `${message.author} (\`${message.author.id}\`)`, inline: true },
-          { name: "📍 Channel", value: `${message.channel}`, inline: true },
-          { name: "⚠️ Total Warnings", value: `\`${warnings[message.author.id]?.length || 1}\``, inline: true },
-          { name: "💬 Content", value: `\`\`\`\n${message.content.slice(0, 1000)}\n\`\`\``, inline: false }
-        )
-        .setFooter({ text: "Security Core Shield" })
+    // If user was pinged while AFK, send Mention History to their DM (Image 8 style)
+    if (data.mentions && data.mentions.length > 0) {
+      const mentionList = data.mentions.slice(0, 10).map((m, i) => {
+        return `**${i + 1}.** **${m.author}** mentioned you:\n> ${m.content}\n[Jump to Message](${m.url})`;
+      }).join("\n\n");
+
+      const mentionEmbed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setTitle(`Mention History for ${message.author.username}`)
+        .setDescription(mentionList)
+        .setFooter({ text: `Total Mentions: ${data.mentions.length} | Today` })
         .setTimestamp();
 
-      await auditChan.send({ embeds: [logEmbed] }).catch(() => {});
+      await message.author.send({ embeds: [mentionEmbed] }).catch(() => {});
     }
-    return;
   }
 
-  /* --- 2. TIERED PROFANITY & VERBAL ABUSE FILTER --- */
-  if (!bypass) {
-    const banTerm = findMatchedTerm(message.content, badWordsDB.ban);
-    const muteTerm = findMatchedTerm(message.content, badWordsDB.mute);
-    const warnTerm = findMatchedTerm(message.content, badWordsDB.warn);
+  /* --- 3. AFK SYSTEM: DETECT PINGS TO AFK USERS --- */
+  if (message.mentions.users.size > 0) {
+    message.mentions.users.forEach(async (target) => {
+      if (target.id !== message.author.id && afkData[target.id]?.isAfk) {
+        const afkEntry = afkData[target.id];
 
-    // TIER 3: DIRECT BAN
+        // Notify chat
+        message.reply(`💤 **${target.displayName || target.username}** is currently AFK: ${afkEntry.reason}`).catch(() => {});
+
+        // Log mention for later DM summary
+        if (!afkEntry.mentions) afkEntry.mentions = [];
+        afkEntry.mentions.push({
+          author: message.author.tag,
+          content: message.cleanContent.slice(0, 300),
+          url: message.url,
+          timestamp: Date.now()
+        });
+        saveAfkData();
+      }
+    });
+  }
+
+  /* --- 4. AUTOMOD FILTERS (TIER 1, 2, 3 & INVITES) --- */
+  if (!bypass) {
+    if (DISCORD_INVITE_REGEX.test(message.content)) {
+      await message.delete().catch(() => {});
+      issueAutoWarning(message.author.id, "Unauthorized server invite or promotion link");
+      return;
+    }
+
+    const banTerm = findMatchedTerm(message.content, badWordsDB.ban);
     if (banTerm) {
       await message.delete().catch(() => {});
-
-      if (!bans[message.author.id]) bans[message.author.id] = { history: [] };
-      bans[message.author.id].history.push({
-        action: "AutoMod Permanent Ban",
-        moderator: "AutoMod",
-        reason: `Extreme verbal violation: "${banTerm}"`,
-        duration: "Permanent",
-        date: Date.now()
-      });
-      saveBans();
-
-      await message.guild.members.ban(message.author.id, {
-        reason: `[AutoMod Tier 3] Prohibited language: "${banTerm}"`
-      }).catch(console.error);
-
-      await message.channel.send(
-        `🚨 ${message.author} has been **permanently banned** for severe verbal violations.`
-      ).catch(() => {});
-
-      const auditChan = message.guild.channels.cache.get(AUDIT_LOG_CHANNEL_ID);
-      if (auditChan) {
-        const logEmbed = new EmbedBuilder()
-          .setColor(0xED4245)
-          .setTitle("🔨 AutoMod • Member Banned (Tier 3)")
-          .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-          .addFields(
-            { name: "👤 Offender", value: `${message.author.tag} (\`${message.author.id}\`)`, inline: true },
-            { name: "📍 Channel", value: `${message.channel}`, inline: true },
-            { name: "🚩 Trigger Word", value: `\`${banTerm}\``, inline: true },
-            { name: "⚖️ Penalty", value: "`Permanent Ban`", inline: true },
-            { name: "💬 Message Content", value: `\`\`\`\n${message.content.slice(0, 1000)}\n\`\`\``, inline: false }
-          )
-          .setFooter({ text: "Automated Enforcement" })
-          .setTimestamp();
-
-        await auditChan.send({ embeds: [logEmbed] }).catch(() => {});
-      }
+      await message.guild.members.ban(message.author.id, { reason: `[AutoMod Tier 3] Prohibited: "${banTerm}"` }).catch(() => {});
       return;
     }
 
-    // TIER 2: ESCALATING MUTE
+    const muteTerm = findMatchedTerm(message.content, badWordsDB.mute);
     if (muteTerm) {
       await message.delete().catch(() => {});
-
-      if (!mutes[message.author.id]) mutes[message.author.id] = { history: [] };
-      const priorMutes = mutes[message.author.id].history.length;
-
-      const muteHours = Math.min(2 * Math.pow(2, priorMutes), 24);
-      const muteDurationMs = muteHours * 60 * 60 * 1000;
-
-      mutes[message.author.id].history.push({
-        action: `AutoMod Mute (${muteHours}h)`,
-        moderator: "AutoMod",
-        reason: `Moderate profanity: "${muteTerm}"`,
-        duration: `${muteHours}h`,
-        date: Date.now()
-      });
-      saveMutes();
-
-      if (member) {
-        await member.timeout(muteDurationMs, `[AutoMod Tier 2] Prohibited language: "${muteTerm}"`).catch(console.error);
-      }
-
-      const alertMsg = await message.channel.send(
-        `🔇 ${message.author} has been timed out for **${muteHours} hour(s)** for inappropriate language.`
-      ).catch(() => {});
-      setTimeout(() => alertMsg?.delete().catch(() => {}), 6000);
-
-      const auditChan = message.guild.channels.cache.get(AUDIT_LOG_CHANNEL_ID);
-      if (auditChan) {
-        const logEmbed = new EmbedBuilder()
-          .setColor(0xFEE75C)
-          .setTitle("🔇 AutoMod • Member Muted (Tier 2)")
-          .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-          .addFields(
-            { name: "👤 Offender", value: `${message.author} (\`${message.author.id}\`)`, inline: true },
-            { name: "📍 Channel", value: `${message.channel}`, inline: true },
-            { name: "🚩 Trigger Word", value: `\`${muteTerm}\``, inline: true },
-            { name: "⏳ Duration", value: `\`${muteHours} Hours\` (Offense #${priorMutes + 1})`, inline: true },
-            { name: "💬 Message Content", value: `\`\`\`\n${message.content.slice(0, 1000)}\n\`\`\``, inline: false }
-          )
-          .setFooter({ text: "Automated Enforcement" })
-          .setTimestamp();
-
-        await auditChan.send({ embeds: [logEmbed] }).catch(() => {});
-      }
+      await member?.timeout(2 * 3600000, `[AutoMod Tier 2] Prohibited: "${muteTerm}"`).catch(() => {});
       return;
     }
 
-    // TIER 1: AUTOMATIC WARNING
+    const warnTerm = findMatchedTerm(message.content, badWordsDB.warn);
     if (warnTerm) {
       await message.delete().catch(() => {});
-      issueAutoWarning(message.author.id, `Mild profanity (Keyword: "${warnTerm}")`);
-
-      const totalWarnings = warnings[message.author.id]?.length || 1;
-
-      let escalationNotice = "";
-      if (totalWarnings >= 3 && member) {
-        await member.timeout(60 * 60 * 1000, "[AutoMod Escalation] Reached 3+ active warnings").catch(() => {});
-        escalationNotice = "\n🚨 **Threshold Reached:** You have accumulated 3+ warnings and received an automatic 1-hour timeout.";
-      }
-
-      const alertMsg = await message.channel.send(
-        `⚠️ ${message.author}, inappropriate language is not allowed. A formal warning has been issued. (Warning #${totalWarnings})${escalationNotice}`
-      ).catch(() => {});
-      setTimeout(() => alertMsg?.delete().catch(() => {}), 6000);
-
-      const auditChan = message.guild.channels.cache.get(AUDIT_LOG_CHANNEL_ID);
-      if (auditChan) {
-        const logEmbed = new EmbedBuilder()
-          .setColor(0x5865F2)
-          .setTitle("⚠️ AutoMod • Member Warned (Tier 1)")
-          .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-          .addFields(
-            { name: "👤 Offender", value: `${message.author} (\`${message.author.id}\`)`, inline: true },
-            { name: "📍 Channel", value: `${message.channel}`, inline: true },
-            { name: "🚩 Trigger Word", value: `\`${warnTerm}\``, inline: true },
-            { name: "⚠️ Total Warnings", value: `\`${totalWarnings}\``, inline: true },
-            { name: "💬 Message Content", value: `\`\`\`\n${message.content.slice(0, 1000)}\n\`\`\``, inline: false }
-          )
-          .setFooter({ text: "Automated Enforcement" })
-          .setTimestamp();
-
-        await auditChan.send({ embeds: [logEmbed] }).catch(() => {});
-      }
+      issueAutoWarning(message.author.id, `Mild profanity: "${warnTerm}"`);
       return;
     }
   }
 
-  /* --- 3. PASSIVE LEVELING XP --- */
+  /* --- 5. PASSIVE CHAT XP & AESTHETIC LEVEL-UP CARD (IMAGE 4) --- */
   const userId = message.author.id;
   if (!levels[userId]) {
     levels[userId] = { xp: 0, level: 1 };
@@ -861,16 +770,33 @@ client.on("messageCreate", async (message) => {
   if (levels[userId].xp >= neededXP) {
     levels[userId].xp -= neededXP;
     levels[userId].level++;
+    saveLevels();
 
-    const levelChannel = client.channels.cache.get(LEVEL_CHANNEL_ID);
+    const levelChannel = client.channels.cache.get(LEVEL_CHANNEL_ID) || message.channel;
     if (levelChannel) {
-      levelChannel.send(
-        `🎉 Congratulations ${message.author}! You have reached level **${levels[userId].level}**! Keep going!`
-      ).catch(() => {});
-    }
-  }
+      // Formatted directly after Image 4 aesthetic
+      const levelUpEmbed = new EmbedBuilder()
+        .setColor(0x00A8FC)
+        .setTitle("🎉 LEVEL UP!")
+        .setDescription(
+          "🌸 **A NEW DECREE** 🌸\n\n" +
+          "**CONGRATULATIONS** 🧑‍🌾\n" +
+          `**${message.member?.displayName || message.author.username}!** YOU REACHED **LEVEL ${levels[userId].level}** 💧\n\n` +
+          "🕊️ **KEEP STRIVING 〜**\n" +
+          "**GREATNESS AWAITS**\n" +
+          "**AT THE NEXT STEP OF 〜**\n" +
+          "**YOUR PATH 〜 <3.** 🕊️"
+        )
+        .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 256 }));
 
-  saveLevels();
+      await levelChannel.send({
+        content: `${message.author}`,
+        embeds: [levelUpEmbed]
+      }).catch(() => {});
+    }
+  } else {
+    saveLevels();
+  }
 });
 
 /* =========================================================
