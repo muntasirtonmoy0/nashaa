@@ -509,10 +509,6 @@ const commands = [
     .addStringOption(o => o.setName("message_id").setDescription("Giveaway message ID").setRequired(true)),
 
   new SlashCommandBuilder()
-    .setName("pay")
-    .setDescription("View Eternal SMP payment methods"),
-
-  new SlashCommandBuilder()
     .setName("rules")
     .setDescription("View Eternal SMP server rules"),
 
@@ -537,14 +533,6 @@ const commands = [
     .setName("afk")
     .setDescription("Set an AFK status with automated mention tracking")
     .addStringOption(o => o.setName("reason").setDescription("Reason for going AFK").setRequired(false)),
-
-  new SlashCommandBuilder()
-    .setName("rank")
-    .setDescription("View server ranks and perks"),
-
-  new SlashCommandBuilder()
-    .setName("spawner")
-    .setDescription("View spawner shop and pricing"),
 
   new SlashCommandBuilder()
     .setName("howgay")
@@ -576,10 +564,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName("guess")
     .setDescription("Play Guess the Number (1 - 10000)"),
-    
-  new SlashCommandBuilder()
-    .setName("ip")
-    .setDescription("View Eternal SMP connection details, ports, and links"),  
 
  new SlashCommandBuilder()
     .setName("help")
@@ -590,7 +574,6 @@ const commands = [
         .setRequired(false)
         .addChoices(
           { name: "🌐 General & Server Info", value: "info" },
-          { name: "🛒 Store & Economy", value: "store" },
           { name: "📊 Levels & Invites", value: "stats" },
           { name: "🎮 Mini-Games & Fun", value: "games" },
           { name: "🛡️ Staff & Moderation", value: "mod" }
@@ -1578,23 +1561,6 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.reply({ embeds: [embed], components: [linkRow] });
     }      
       
-    /* --- PAY --- */
-    if (commandName === "pay") {
-      const embed = new EmbedBuilder()
-        .setColor(0x8600FF)
-        .setTitle("💰 Eternal SMP Payment Methods")
-        .setDescription(
-          "**<a:arrow:1507782135212150845> Bkash 1 (Personal → Personal):** 01741644334\n\n" +
-          "**<a:arrow:1507782135212150845> Bkash 2 (Agent / Personal → Personal):** 01768166414\n\n" +
-          "<:shoppie:1507809836421873725> Send screenshot in support ticket after payment!"
-        )
-        .setImage(BANNER)
-        .setFooter({ text: "Eternal SMP Store" })
-        .setTimestamp();
-
-      return interaction.reply({ embeds: [embed] });
-    }
-
     /* --- RULES --- */
     if (commandName === "rules") {
       const embed = new EmbedBuilder()
