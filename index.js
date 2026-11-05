@@ -2513,7 +2513,8 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       return;
     }
-
+}
+  
  /* =========================================================
      VOICE CONTROL PANEL: DROPDOWN MENUS
   ========================================================= */
