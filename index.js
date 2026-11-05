@@ -444,6 +444,16 @@ const commands = [
     .setDescription("Play the classic Snake arcade game"),
 
   new SlashCommandBuilder()
+    .setName("messages")
+    .setDescription("View detailed message activity statistics")
+    .addUserOption(o => o.setName("user").setDescription("Target user (optional)").setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName("afk")
+    .setDescription("Set an AFK status with automated mention tracking")
+    .addStringOption(o => o.setName("reason").setDescription("Reason for going AFK").setRequired(false)),
+
+  new SlashCommandBuilder()
     .setName("help")
     .setDescription("View all available commands, categories, and syntax instructions")
     .addStringOption(o =>
