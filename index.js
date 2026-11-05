@@ -2068,143 +2068,162 @@ By interacting with this server and our services, you agree to comply with our c
       return;
     }
 
-    /* --- MULTI-CATEGORY LEADERBOARD SYSTEM --- */
-    if (commandName === "leaderboard") {
-      const selectedType = interaction.options.getString("type") || "levels";
+    /* --- MESSAGES STATS (MATCHES IMAGE 1) --- */
+    if (commandName === "messages") {
+      const targetUser = interaction.options.getUser("user") || interaction.user;
+      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+      const stats = messageStats[targetUser.id] || { allTime: 0, monthly: 0, weekly: 0, today: 0 };
+      const resets = getResetTimers();
 
-      function buildLeaderboardEmbed(type) {
-        const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
-
-        if (type === "levels") {
-          const sortedLevels = Object.entries(levels)
-            .sort(([, a], [, b]) => (b.level - a.level) || (b.xp - a.xp))
-            .slice(0, 10);
-
-          const desc = sortedLevels.length > 0
-            ? sortedLevels.map(([id, d], i) => `${medals[i]} <@${id}> • **Level ${d.level}** \`(${d.xp} XP)\``).join("\n")
-            : "*No active leveling records found.*";
-
-          return new EmbedBuilder()
-            .setColor(0x8600FF)
-            .setTitle("⭐ Level Leaderboard")
-            .setDescription(
-              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-              desc + "\n" +
-              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-              "💬 *Chat in text channels to earn XP and climb the rankings!*"
-            )
-            .setImage(BANNER)
-            .setFooter({ text: "Level Rankings" })
-            .setTimestamp();
-        }
-
-        if (type === "invites") {
-          const sortedInvites = Object.entries(invites)
-            .filter(([, d]) => (d.current || 0) > 0)
-            .sort(([, a], [, b]) => (b.current || 0) - (a.current || 0))
-            .slice(0, 10);
-
-          const desc = sortedInvites.length > 0
-            ? sortedInvites.map(([id, d], i) => `${medals[i]} <@${id}> • **${d.current}** Invites \`(${d.total || 0} Total / ${d.fake || 0} Fake)\``).join("\n")
-            : "*No tracked invites found.*";
-
-          return new EmbedBuilder()
-            .setColor(0x57F287)
-            .setTitle("📨 Invite Leaderboard")
-            .setDescription(
-              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-              desc + "\n" +
-              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-              "👥 *Invite members to the server to climb the rankings!*"
-            )
-            .setImage(BANNER)
-            .setFooter({ text: "Invite Rankings" })
-            .setTimestamp();
-        }
-
-        if (type === "honor") {
-          const cleanUsers = Object.entries(levels)
-            .filter(([id]) => {
-              const hasWarns = warnings[id] && warnings[id].length > 0;
-              const hasMutes = mutes[id] && mutes[id].history && mutes[id].history.length > 0;
-              const hasBans = bans[id] && bans[id].history && bans[id].history.length > 0;
-              return !hasWarns && !hasMutes && !hasBans;
-            })
-            .sort(([, a], [, b]) => (b.level - a.level) || (b.xp - a.xp))
-            .slice(0, 10);
-
-          const desc = cleanUsers.length > 0
-            ? cleanUsers.map(([id, d], i) => `${medals[i]} <@${id}> • **Level ${d.level}** — 🛡️ \`Spotless Record\``).join("\n")
-            : "*No qualifying clean-standing members found.*";
-
-          return new EmbedBuilder()
-            .setColor(0x3BA55C)
-            .setTitle("🛡️ Honor Roll (Zero Violations)")
-            .setDescription(
-              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-              desc + "\n" +
-              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-              "✨ *Awarded to active users with **0 warnings, 0 mutes, and 0 bans**!*"
-            )
-            .setImage(BANNER)
-            .setFooter({ text: "Clean Standing" })
-            .setTimestamp();
-        }
-      }
-
-      function buildActionRow(current) {
-        return new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId("lb_levels")
-            .setLabel("Levels")
-            .setEmoji("⭐")
-            .setStyle(current === "levels" ? ButtonStyle.Primary : ButtonStyle.Secondary),
-          new ButtonBuilder()
-            .setCustomId("lb_invites")
-            .setLabel("Invites")
-            .setEmoji("📨")
-            .setStyle(current === "invites" ? ButtonStyle.Primary : ButtonStyle.Secondary),
-          new ButtonBuilder()
-            .setCustomId("lb_honor")
-            .setLabel("Clean Standing")
-            .setEmoji("🛡️")
-            .setStyle(current === "honor" ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      const embed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setTitle(`${targetMember?.displayName || targetUser.username}'s Messages`)
+        .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setDescription(
+          "❯ **Message Statistics**\n\n" +
+          `**All Time** • \`${(stats.allTime || 0).toLocaleString()}\` messages\n` +
+          `**This Month** • \`${(stats.monthly || 0).toLocaleString()}\` messages\n` +
+          `**This Week** • \`${(stats.weekly || 0).toLocaleString()}\` messages\n` +
+          `**Today** • \`${(stats.today || 0).toLocaleString()}\` messages\n\n` +
+          "✦ **Next Reset**\n" +
+          `Daily: \`${resets.daily}\` • Weekly: \`${resets.weekly}\` • Monthly: \`${resets.monthly}\`\n\n` +
+          `*Your message statistics • <t:${Math.floor(Date.now() / 1000)}:R>*`
         );
+
+      return interaction.reply({ embeds: [embed] });
+    }
+
+    /* --- AFK STATUS (MATCHES IMAGE 7) --- */
+    if (commandName === "afk") {
+      const reason = interaction.options.getString("reason") || "I am afk :)";
+
+      afkData[interaction.user.id] = {
+        isAfk: true,
+        reason,
+        since: Date.now(),
+        mentions: []
+      };
+      saveAfkData();
+
+      return interaction.reply({
+        content: `You are now AFK for: **${reason}**`
+      });
+    }
+    
+    /* --- REAL-TIME LEADERBOARD (MATCHES IMAGES 2 & 3) --- */
+    if (commandName === "leaderboard") {
+      function generateLeaderboardEmbed(mode) {
+        const medals = ["#1", "#2", "#3", "#4", "#5", "#6", "#7", "#8", "#9", "#10"];
+        let listText = "";
+        let userStandingText = "";
+
+        if (mode === "daily") {
+          const sorted = Object.entries(messageStats)
+            .filter(([, d]) => (d.today || 0) > 0)
+            .sort(([, a], [, b]) => (b.today || 0) - (a.today || 0));
+
+          const top10 = sorted.slice(0, 10);
+          listText = top10.length > 0
+            ? top10.map(([id, d], i) => `${medals[i]} <@${id}> • **${(d.today || 0).toLocaleString()} Messages**`).join("\n\n")
+            : "*No chat messages recorded today.*";
+
+          const rankIdx = sorted.findIndex(([id]) => id === interaction.user.id);
+          const userCount = messageStats[interaction.user.id]?.today || 0;
+          const userRank = rankIdx !== -1 ? rankIdx + 1 : sorted.length + 1;
+          userStandingText = `⭐ **Your Standing: #${userRank} of ${Math.max(sorted.length, 1)}** ${interaction.user} • **${userCount.toLocaleString()} Messages**`;
+
+        } else {
+          // Default: XP & Levels
+          const sorted = Object.entries(levels)
+            .sort(([, a], [, b]) => (b.level - a.level) || (b.xp - a.xp));
+
+          const top10 = sorted.slice(0, 10);
+          listText = top10.length > 0
+            ? top10.map(([id, d], i) => `${medals[i]} <@${id}> • **Level ${d.level}** • **${(d.xp || 0).toLocaleString()} XP**`).join("\n\n")
+            : "*No leveling data registered yet.*";
+
+          const rankIdx = sorted.findIndex(([id]) => id === interaction.user.id);
+          const userLvl = levels[interaction.user.id]?.level || 1;
+          const userXp = levels[interaction.user.id]?.xp || 0;
+          const userRank = rankIdx !== -1 ? rankIdx + 1 : sorted.length + 1;
+          userStandingText = `⭐ **Your Standing: #${userRank} of ${Math.max(sorted.length, 1)}** ${interaction.user} • **Level ${userLvl} • ${userXp.toLocaleString()} XP**`;
+        }
+
+        return new EmbedBuilder()
+          .setColor(0x00A8FC)
+          .setTitle(mode === "daily" ? "💬 Daily Chat Leaderboard" : "XP & Level Leaderboard")
+          .setDescription(
+            "*The rankings are being updated in real-time!*\n\n" +
+            listText + "\n\n" +
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+            userStandingText
+          )
+          .setFooter({ text: "Page 1/1 | Eternal Real-Time Leaderboard" })
+          .setTimestamp();
       }
 
-      const initialEmbed = buildLeaderboardEmbed(selectedType);
-      const initialRow = buildActionRow(selectedType);
+      function getButtons(active) {
+        return [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId("lb_levels")
+              .setLabel("Top XP & Levels")
+              .setEmoji("🏆")
+              .setStyle(active === "levels" ? ButtonStyle.Primary : ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId("lb_daily")
+              .setLabel("Daily Chat (Today)")
+              .setEmoji("💬")
+              .setStyle(active === "daily" ? ButtonStyle.Primary : ButtonStyle.Secondary)
+          ),
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId("lb_invites")
+              .setLabel("Top Invites")
+              .setEmoji("📨")
+              .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId("lb_refresh")
+              .setLabel("Refresh")
+              .setEmoji("🔄")
+              .setStyle(ButtonStyle.Secondary)
+          )
+        ];
+      }
 
+      let currentMode = "levels";
       const replyMsg = await interaction.reply({
-        embeds: [initialEmbed],
-        components: [initialRow],
+        embeds: [generateLeaderboardEmbed(currentMode)],
+        components: getButtons(currentMode),
         fetchReply: true
       });
 
       const collector = replyMsg.createMessageComponentCollector({
-        filter: (i) => i.customId.startsWith("lb_"),
+        filter: (i) => i.user.id === interaction.user.id,
         time: 5 * 60 * 1000
       });
 
-      collector.on("collect", async (btnInt) => {
-        const category = btnInt.customId.replace("lb_", "");
-        await btnInt.update({
-          embeds: [buildLeaderboardEmbed(category)],
-          components: [buildActionRow(category)]
+      collector.on("collect", async (i) => {
+        if (i.customId === "lb_levels") currentMode = "levels";
+        if (i.customId === "lb_daily") currentMode = "daily";
+        // lb_refresh just re-renders with currentMode
+
+        await i.update({
+          embeds: [generateLeaderboardEmbed(currentMode)],
+          components: getButtons(currentMode)
         }).catch(() => {});
       });
 
       collector.on("end", async () => {
-        const disabledRow = new ActionRowBuilder().addComponents(
-          initialRow.components.map(b => ButtonBuilder.from(b).setDisabled(true))
-        );
-        await replyMsg.edit({ components: [disabledRow] }).catch(() => {});
+        const disabledRows = getButtons(currentMode).map(row => {
+          row.components.forEach(btn => btn.setDisabled(true));
+          return row;
+        });
+        await replyMsg.edit({ components: disabledRows }).catch(() => {});
       });
 
       return;
-    }     
-
-  }
+    }
 
   /* =========================================================
      13. SELECT MENU TICKETS
