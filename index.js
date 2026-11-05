@@ -22,43 +22,43 @@ const {
 const fs = require("fs");
 const ms = require("ms");
 
-/* =========================
-   IMAGES
-========================= */
-const BANNER =
-  "https://cdn.discordapp.com/attachments/1508843787064185103/1509148139024547891/1000016350-ezremove.gif?ex=6a181f3a&is=6a16cdba&hm=e14c4ae7628e82a918334f96f5f5db5401a2f474801519145a2194f0bd0ae53e&";
+/* =========================================================
+   1. VISUAL ASSETS (BANNERS & ICONS)
+   - Replace placeholders with valid direct image/GIF URLs (https://...).
+========================================================= */
+const BANNER = "YOUR_BANNER_IMAGE_URL_HERE";
+const THUMBNAIL = "YOUR_THUMBNAIL_IMAGE_URL_HERE";
 
-const THUMBNAIL =
-  "https://cdn.discordapp.com/attachments/1508843787064185103/1509148049375498260/1000016387-ezremove.gif?ex=6a181f25&is=6a16cda5&hm=f50b3cd0602727d2db53802bfb335d2e24757b2f79f355ea07f7668b801ed60f&";
-
-/* =========================
-   CHANNEL IDS
-========================= */
-const WELCOME_CHANNEL_ID = "1504121883841270032";
-const GOODBYE_CHANNEL_ID = "1504122077966368919";
-const BOOST_CHANNEL_ID = "1509893252168421556";
-const LEVEL_CHANNEL_ID = "1506091937726333081";
-const INVITE_LOG_CHANNEL_ID = "1513142091860017152";
-const TICKET_LOG_CHANNEL_ID = "1549056747132551330";
-const JOIN_TO_CREATE_CHANNEL_ID = "1549457451844378705";
+/* =========================================================
+   2. SERVER CHANNEL IDS
+   - Right-click each target channel in Discord (with Developer Mode ON)
+     and click "Copy Channel ID".
+========================================================= */
+const WELCOME_CHANNEL_ID = "YOUR_WELCOME_CHANNEL_ID";
+const GOODBYE_CHANNEL_ID = "YOUR_GOODBYE_CHANNEL_ID";
+const BOOST_CHANNEL_ID = "YOUR_BOOST_ANNOUNCEMENT_CHANNEL_ID";
+const LEVEL_CHANNEL_ID = "YOUR_LEVEL_UP_NOTIFICATION_CHANNEL_ID";
+const INVITE_LOG_CHANNEL_ID = "YOUR_INVITE_LOG_CHANNEL_ID";
+const TICKET_LOG_CHANNEL_ID = "YOUR_TICKET_TRANSCRIPTS_CHANNEL_ID";
+const JOIN_TO_CREATE_CHANNEL_ID = "YOUR_JOIN_TO_CREATE_VOICE_CHANNEL_ID";
 const activeTempVoiceChannels = new Set();
 
-/* =========================
-   AUTOMOD & AUDIT LOG CONFIG
-========================= */
-// Channel where all security & audit embeds will be sent
-const AUDIT_LOG_CHANNEL_ID = "1560522955358871592"; 
+/* =========================================================
+   3. AUTOMOD & AUDIT LOG CONFIGURATION
+========================================================= */
+// Channel where deleted/edited messages & automod security alerts are logged
+const AUDIT_LOG_CHANNEL_ID = "YOUR_AUDIT_LOG_CHANNEL_ID"; 
 
-// If you want to restrict automod to ONE specific channel, put its ID here.
-// Set to null to protect all channels across the server.
+// Set to a Channel ID if you want automod to monitor ONLY that channel.
+// Leave as null to monitor all channels across the server.
 const MONITORED_CHANNEL_ID = null; 
 
 // Invite link detection pattern
 const DISCORD_INVITE_REGEX = /(https?:\/\/)?(www\.)?(discord\.(gg|io|me|li)|discordapp\.com\/invite|discord\.com\/invite)\/[a-zA-Z0-9_-]+/i;
 
-/* =========================
-   TIERED AUTOMOD LOADER
-========================= */
+/* =========================================================
+   4. TIERED AUTOMOD LOADER
+========================================================= */
 const DEFAULT_BAD_WORDS = { warn: [], mute: [], ban: [] };
 
 function loadBadWords() {
@@ -78,7 +78,6 @@ function loadBadWords() {
 let badWordsDB = loadBadWords();
 console.log(`[AUTOMOD LOADED] Warn: ${badWordsDB.warn?.length || 0} | Mute: ${badWordsDB.mute?.length || 0} | Ban: ${badWordsDB.ban?.length || 0}`);
 
-// Helper function to issue automatic warnings
 function issueAutoWarning(userId, reason) {
   if (!warnings[userId]) warnings[userId] = [];
   warnings[userId].push({
@@ -88,7 +87,6 @@ function issueAutoWarning(userId, reason) {
   saveWarnings();
 }
 
-// Matches single words (with symbols like @, *) and multi-word combinations safely
 function findMatchedTerm(content, wordList) {
   if (!Array.isArray(wordList)) return null;
   const lower = content.toLowerCase();
@@ -108,18 +106,18 @@ function findMatchedTerm(content, wordList) {
   return null;
 }
 
-/* =========================
-   ANTI-NUKE CONFIGURATION
-========================= */
-const ANTI_NUKE_LOG_CHANNEL_ID = "1551051405639426168"; // Set to your staff log or emergency alert channel
+/* =========================================================
+   5. ANTI-NUKE CONFIGURATION
+========================================================= */
+// Channel where emergency alerts will be posted if nuke thresholds are exceeded
+const ANTI_NUKE_LOG_CHANNEL_ID = "YOUR_STAFF_OR_SECURITY_LOG_CHANNEL_ID";
 const nukeTracker = new Map();
 
-// Limits allowed within a 10-second rolling window
 const NUKE_LIMITS = {
-  CHANNEL_DELETE: 2, // Max channel deletions before auto-ban
-  ROLE_DELETE: 2,    // Max role deletions before auto-ban
-  MEMBER_BAN: 3,     // Max bans issued before auto-ban
-  WINDOW_MS: 10000   // 10-second interval
+  CHANNEL_DELETE: 2, // Max channel deletions within 10s
+  ROLE_DELETE: 2,    // Max role deletions within 10s
+  MEMBER_BAN: 3,     // Max bans issued within 10s
+  WINDOW_MS: 10000   // 10-second rolling window
 };
 
 function recordNukeAction(userId, actionType) {
@@ -131,7 +129,6 @@ function recordNukeAction(userId, actionType) {
   const userData = nukeTracker.get(userId);
   const timestamps = userData[actionType];
 
-  // Purge actions older than the 10-second window
   const validTimestamps = timestamps.filter(t => now - t < NUKE_LIMITS.WINDOW_MS);
   validTimestamps.push(now);
   userData[actionType] = validTimestamps;
@@ -140,18 +137,15 @@ function recordNukeAction(userId, actionType) {
 }
 
 async function triggerNukeDefense(guild, executor, actionName, count) {
-  // Never punish the server owner or the bot itself
   if (!executor || executor.id === OWNER_ID || executor.id === client.user.id) return;
 
   try {
-    // 1. Immediately ban the rogue moderator
     await guild.members.ban(executor.id, {
-      reason: `[ETERNAL ANTI-NUKE] Exceeded ${actionName} threshold (${count} actions within 10s)`
+      reason: `[ANTI-NUKE] Exceeded ${actionName} threshold (${count} actions within 10s)`
     });
 
     console.warn(`[ANTI-NUKE ACTIVATED] Banned ${executor.tag} (${executor.id}) for mass ${actionName}.`);
 
-    // 2. Dispatch Emergency Alert Embed to the Staff Log Channel
     const alertEmbed = new EmbedBuilder()
       .setColor(0xFF0000)
       .setTitle("🚨 EMERGENCY: SERVER NUKE ATTEMPT NEUTRALIZED")
@@ -162,7 +156,7 @@ async function triggerNukeDefense(guild, executor, actionName, count) {
         `**System Response:** 🔨 **Permanent Ban Issued Instantly**`
       )
       .setImage(BANNER)
-      .setFooter({ text: "Eternal SMP Core Shield" })
+      .setFooter({ text: "Server Core Shield" })
       .setTimestamp();
 
     const logChannel = guild.channels.cache.get(ANTI_NUKE_LOG_CHANNEL_ID);
@@ -170,7 +164,6 @@ async function triggerNukeDefense(guild, executor, actionName, count) {
       await logChannel.send({ content: `<@${OWNER_ID}> ⚠️ **URGENT SECURITY ALERT**`, embeds: [alertEmbed] }).catch(() => {});
     }
 
-    // 3. Direct Message the Server Owner
     const owner = await client.users.fetch(OWNER_ID).catch(() => null);
     if (owner) {
       await owner.send({
@@ -183,19 +176,16 @@ async function triggerNukeDefense(guild, executor, actionName, count) {
   }
 }
 
-/* =========================
-   MODERATION SYSTEM
-========================= */
-const OWNER_ID = "1354755206528630894";
+/* =========================================================
+   6. ACCESS CONTROL & PERMISSIONS
+========================================================= */
+// User ID of the primary server owner (Has root bypass & permission to use owner commands)
+const OWNER_ID = "YOUR_DISCORD_USER_ID_HERE";
 
+// Array of User IDs or Role IDs granted staff moderation authority
 const STAFF_USER_IDS = [
-  "1504160922376081480",
-  "1548718895173730407",
-  "1529537332112261344",
-  "1272908975813165114",
-  "1500677494934737050",
-  "1306625186354692228",
-  "1427534146019921981"
+  "STAFF_USER_OR_ROLE_ID_1",
+  "STAFF_USER_OR_ROLE_ID_2"
 ];
 
 function isStaff(member) {
@@ -203,10 +193,12 @@ function isStaff(member) {
   return (
     member.id === OWNER_ID ||
     STAFF_USER_IDS.includes(member.id) ||
+    member.roles.cache.some(r => STAFF_USER_IDS.includes(r.id)) ||
     member.permissions.has(PermissionsBitField.Flags.Administrator)
   );
 }
 
+// Local JSON Database Initializers
 if (!fs.existsSync("./warnings.json")) fs.writeFileSync("./warnings.json", "{}");
 if (!fs.existsSync("./levels.json")) fs.writeFileSync("./levels.json", "{}");
 if (!fs.existsSync("./mutes.json")) fs.writeFileSync("./mutes.json", "{}");
@@ -239,9 +231,9 @@ function saveGiveaways() {
   fs.writeFileSync("./giveaways.json", JSON.stringify(activeGiveaways, null, 2));
 }
 
-/* =========================
-   INVITES SYSTEM
-========================= */
+/* =========================================================
+   7. INVITES SYSTEM
+========================================================= */
 if (!fs.existsSync("./invites.json")) {
   fs.writeFileSync("./invites.json", "{}");
 }
@@ -285,9 +277,9 @@ function saveInvites() {
   fs.writeFileSync("./invites.json", JSON.stringify(invites, null, 2));
 }
 
-/* =========================
-   DISCORD CLIENT
-========================= */
+/* =========================================================
+   8. CLIENT SETUP
+========================================================= */
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -308,9 +300,9 @@ const client = new Client({
 
 const inviteCache = new Map();
 
-/* =========================
-   SLASH COMMAND DEFINITIONS
-========================= */
+/* =========================================================
+   9. SLASH COMMAND DEFINITIONS
+========================================================= */
 const commands = [
   new SlashCommandBuilder()
     .setName("leveladd")
@@ -401,16 +393,12 @@ const commands = [
     .addStringOption(o => o.setName("message_id").setDescription("Giveaway message ID").setRequired(true)),
 
   new SlashCommandBuilder()
-    .setName("pay")
-    .setDescription("View Eternal SMP payment methods"),
-
-  new SlashCommandBuilder()
     .setName("rules")
-    .setDescription("View Eternal SMP server rules"),
+    .setDescription("View server rules"),
 
   new SlashCommandBuilder()
     .setName("grules")
-    .setDescription("View Minecraft in-game rules"),
+    .setDescription("View in-game rules"),
 
   new SlashCommandBuilder()
     .setName("punishments")
@@ -418,19 +406,11 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("tac")
-    .setDescription("View Eternal SMP store terms and conditions"),
-
-  new SlashCommandBuilder()
-    .setName("rank")
-    .setDescription("View server ranks and perks"),
-
-  new SlashCommandBuilder()
-    .setName("spawner")
-    .setDescription("View spawner shop and pricing"),
+    .setDescription("View server terms and conditions"),
 
   new SlashCommandBuilder()
     .setName("howgay")
-    .setDescription("Calculate gay percentage meter")
+    .setDescription("Calculate fun affinity percentage meter")
     .addUserOption(o => o.setName("user").setDescription("User to check (optional)").setRequired(false)),
 
   new SlashCommandBuilder()
@@ -458,12 +438,12 @@ const commands = [
   new SlashCommandBuilder()
     .setName("guess")
     .setDescription("Play Guess the Number (1 - 10000)"),
-    
-  new SlashCommandBuilder()
-    .setName("ip")
-    .setDescription("View Eternal SMP connection details, ports, and links"),  
 
- new SlashCommandBuilder()
+  new SlashCommandBuilder()
+    .setName("snake")
+    .setDescription("Play the classic Snake arcade game"),
+
+  new SlashCommandBuilder()
     .setName("help")
     .setDescription("View all available commands, categories, and syntax instructions")
     .addStringOption(o =>
@@ -472,14 +452,13 @@ const commands = [
         .setRequired(false)
         .addChoices(
           { name: "🌐 General & Server Info", value: "info" },
-          { name: "🛒 Store & Economy", value: "store" },
           { name: "📊 Levels & Invites", value: "stats" },
           { name: "🎮 Mini-Games & Fun", value: "games" },
           { name: "🛡️ Staff & Moderation", value: "mod" }
         )
     ),
-    
- new SlashCommandBuilder()
+
+  new SlashCommandBuilder()
     .setName("leaderboard")
     .setDescription("View server rankings for Levels, Invites, and Clean Standing")
     .addStringOption(o =>
@@ -494,18 +473,19 @@ const commands = [
     ),   
 ];
 
-/* =========================
-   READY EVENT
-========================= */
+/* =========================================================
+   10. READY EVENT
+========================================================= */
 client.once("ready", async () => {
   console.log(`${client.user.tag} is online!`);
 
-  // Register Slash Commands Instantly to Your Server
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
   try {
     console.log("Registering application (/) commands to the server...");
+    
+    // REPLACE THIS GUILD ID WITH YOUR TARGET GUILD/SERVER ID
     await rest.put(
-      Routes.applicationGuildCommands(client.user.id, "1504100985197301802"),
+      Routes.applicationGuildCommands(client.user.id, "YOUR_GUILD_ID_HERE"),
       { body: commands.map(c => c.toJSON()) }
     );
     console.log("Application (/) commands successfully registered!");
@@ -526,9 +506,7 @@ client.once("ready", async () => {
     inviteCache.set(guild.id, cache);
   });
 
-  /* =========================
-     BACKGROUND GIVEAWAY CHECKER
-  ========================= */
+  /* Background Giveaway Checker */
   setInterval(async () => {
     const now = Date.now();
 
@@ -588,13 +566,13 @@ client.once("ready", async () => {
         }
       }
     }
-  }, 10000); // Scans every 10 seconds
+  }, 10000);
 
 });
 
-/* =========================
-   PASSIVE XP & TIERED AUTOMOD
-========================= */
+/* =========================================================
+   11. PASSIVE XP & TIERED AUTOMOD
+========================================================= */
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
@@ -627,7 +605,7 @@ client.on("messageCreate", async (message) => {
           { name: "⚠️ Total Warnings", value: `\`${warnings[message.author.id]?.length || 1}\``, inline: true },
           { name: "💬 Content", value: `\`\`\`\n${message.content.slice(0, 1000)}\n\`\`\``, inline: false }
         )
-        .setFooter({ text: "Eternal SMP Core Shield" })
+        .setFooter({ text: "Security Core Shield" })
         .setTimestamp();
 
       await auditChan.send({ embeds: [logEmbed] }).catch(() => {});
@@ -641,22 +619,22 @@ client.on("messageCreate", async (message) => {
     const muteTerm = findMatchedTerm(message.content, badWordsDB.mute);
     const warnTerm = findMatchedTerm(message.content, badWordsDB.warn);
 
-    // TIER 3: DIRECT BAN (Extreme Slurs, Hate Speech, Extreme Toxicity)
+    // TIER 3: DIRECT BAN
     if (banTerm) {
       await message.delete().catch(() => {});
 
       if (!bans[message.author.id]) bans[message.author.id] = { history: [] };
       bans[message.author.id].history.push({
         action: "AutoMod Permanent Ban",
-        moderator: "Eternal AutoMod",
-        reason: `Extreme verbal violation / prohibited slur: "${banTerm}"`,
+        moderator: "AutoMod",
+        reason: `Extreme verbal violation: "${banTerm}"`,
         duration: "Permanent",
         date: Date.now()
       });
       saveBans();
 
       await message.guild.members.ban(message.author.id, {
-        reason: `[AutoMod Tier 3] Prohibited extreme language: "${banTerm}"`
+        reason: `[AutoMod Tier 3] Prohibited language: "${banTerm}"`
       }).catch(console.error);
 
       await message.channel.send(
@@ -676,7 +654,7 @@ client.on("messageCreate", async (message) => {
             { name: "⚖️ Penalty", value: "`Permanent Ban`", inline: true },
             { name: "💬 Message Content", value: `\`\`\`\n${message.content.slice(0, 1000)}\n\`\`\``, inline: false }
           )
-          .setFooter({ text: "Eternal SMP Enforcement" })
+          .setFooter({ text: "Automated Enforcement" })
           .setTimestamp();
 
         await auditChan.send({ embeds: [logEmbed] }).catch(() => {});
@@ -684,20 +662,19 @@ client.on("messageCreate", async (message) => {
       return;
     }
 
-    // TIER 2: ESCALATING MUTE (Moderate Abuse, Explicit Profanity)
+    // TIER 2: ESCALATING MUTE
     if (muteTerm) {
       await message.delete().catch(() => {});
 
       if (!mutes[message.author.id]) mutes[message.author.id] = { history: [] };
       const priorMutes = mutes[message.author.id].history.length;
 
-      // Escalation ladder: 1st offense = 2 hours, 2nd = 4 hours, 3rd = 8 hours, 4th+ = 24 hours
       const muteHours = Math.min(2 * Math.pow(2, priorMutes), 24);
       const muteDurationMs = muteHours * 60 * 60 * 1000;
 
       mutes[message.author.id].history.push({
         action: `AutoMod Mute (${muteHours}h)`,
-        moderator: "Eternal AutoMod",
+        moderator: "AutoMod",
         reason: `Moderate profanity: "${muteTerm}"`,
         duration: `${muteHours}h`,
         date: Date.now()
@@ -709,7 +686,7 @@ client.on("messageCreate", async (message) => {
       }
 
       const alertMsg = await message.channel.send(
-        `🔇 ${message.author} has been timed out for **${muteHours} hour(s)** for moderate profanity/verbal abuse.`
+        `🔇 ${message.author} has been timed out for **${muteHours} hour(s)** for inappropriate language.`
       ).catch(() => {});
       setTimeout(() => alertMsg?.delete().catch(() => {}), 6000);
 
@@ -726,7 +703,7 @@ client.on("messageCreate", async (message) => {
             { name: "⏳ Duration", value: `\`${muteHours} Hours\` (Offense #${priorMutes + 1})`, inline: true },
             { name: "💬 Message Content", value: `\`\`\`\n${message.content.slice(0, 1000)}\n\`\`\``, inline: false }
           )
-          .setFooter({ text: "Eternal SMP Enforcement" })
+          .setFooter({ text: "Automated Enforcement" })
           .setTimestamp();
 
         await auditChan.send({ embeds: [logEmbed] }).catch(() => {});
@@ -734,14 +711,13 @@ client.on("messageCreate", async (message) => {
       return;
     }
 
-    // TIER 1: AUTOMATIC WARNING (Mild Profanity, Light Insults)
+    // TIER 1: AUTOMATIC WARNING
     if (warnTerm) {
       await message.delete().catch(() => {});
       issueAutoWarning(message.author.id, `Mild profanity (Keyword: "${warnTerm}")`);
 
       const totalWarnings = warnings[message.author.id]?.length || 1;
 
-      // If user reaches 3 or more warnings, escalate to a 1-hour timeout
       let escalationNotice = "";
       if (totalWarnings >= 3 && member) {
         await member.timeout(60 * 60 * 1000, "[AutoMod Escalation] Reached 3+ active warnings").catch(() => {});
@@ -766,7 +742,7 @@ client.on("messageCreate", async (message) => {
             { name: "⚠️ Total Warnings", value: `\`${totalWarnings}\``, inline: true },
             { name: "💬 Message Content", value: `\`\`\`\n${message.content.slice(0, 1000)}\n\`\`\``, inline: false }
           )
-          .setFooter({ text: "Eternal SMP Enforcement" })
+          .setFooter({ text: "Automated Enforcement" })
           .setTimestamp();
 
         await auditChan.send({ embeds: [logEmbed] }).catch(() => {});
@@ -791,7 +767,7 @@ client.on("messageCreate", async (message) => {
     const levelChannel = client.channels.cache.get(LEVEL_CHANNEL_ID);
     if (levelChannel) {
       levelChannel.send(
-        `<:damn:1507752860643885076> Congratulations ${message.author}! You have reached level **${levels[userId].level}** Keep going <:doreamon:1509901634229112832>`
+        `🎉 Congratulations ${message.author}! You have reached level **${levels[userId].level}**! Keep going!`
       ).catch(() => {});
     }
   }
@@ -799,14 +775,11 @@ client.on("messageCreate", async (message) => {
   saveLevels();
 });
 
-/* =========================
-   SLASH COMMANDS & INTERACTIONS
-========================= */
+/* =========================================================
+   12. SLASH COMMAND INTERACTIONS
+========================================================= */
 client.on("interactionCreate", async (interaction) => {
 
-  /* =========================
-     CHAT INPUT COMMANDS
-  ========================= */
   if (interaction.isChatInputCommand()) {
     const { commandName } = interaction;
     const member = interaction.member;
@@ -834,7 +807,7 @@ client.on("interactionCreate", async (interaction) => {
       saveLevels();
 
       return interaction.reply(
-        `<a:verify_a:1508071382704193616> ${target.tag} has been given **${amount} levels**! Now level **${levels[userId].level}**`
+        `✅ ${target.tag} has been given **${amount} levels**! Now level **${levels[userId].level}**.`
       );
     }
 
@@ -866,12 +839,12 @@ client.on("interactionCreate", async (interaction) => {
         await targetMember.ban({ reason });
 
         return interaction.reply(
-          `<a:verify_a:1508071382704193616> ${targetUser.tag} permanently banned.\nReason: ${reason}`
+          `🔨 ${targetUser.tag} permanently banned.\nReason: ${reason}`
         );
       }
 
       const durationMs = ms(duration);
-      if (!durationMs) return interaction.reply({ content: "❌ Use: 1h, 1d, 7d, 30d, etc.", ephemeral: true });
+      if (!durationMs) return interaction.reply({ content: "❌ Use formats like: 1h, 1d, 7d, 30d.", ephemeral: true });
 
       bans[targetUser.id].history.push({
         action: "Temp Ban",
@@ -886,7 +859,7 @@ client.on("interactionCreate", async (interaction) => {
       await targetMember.ban({ reason: `${reason} | Temp Ban` });
 
       interaction.reply(
-        `<a:verify_a:1508071382704193616> ${targetUser.tag} banned for ${duration}`
+        `🔨 ${targetUser.tag} banned for ${duration}`
       );
 
       setTimeout(async () => {
@@ -902,7 +875,7 @@ client.on("interactionCreate", async (interaction) => {
 
           saveBans();
           interaction.channel.send(
-            `<a:verify_a:1508071382704193616> ${targetUser.tag}'s temporary ban expired.`
+            `🔓 ${targetUser.tag}'s temporary ban has expired.`
           );
         } catch {}
       }, durationMs);
@@ -929,7 +902,7 @@ client.on("interactionCreate", async (interaction) => {
         });
 
         saveBans();
-        return interaction.reply(`<a:verify_a:1508071382704193616> User ${userId} has been unbanned.`);
+        return interaction.reply(`🔓 User ${userId} has been unbanned.`);
       } catch {
         return interaction.reply({ content: "❌ Failed to unban user. Make sure the ID is valid.", ephemeral: true });
       }
@@ -943,7 +916,7 @@ client.on("interactionCreate", async (interaction) => {
       const warns = warnings[target.id] || [];
 
       if (warns.length === 0) {
-        return interaction.reply(`<a:verify_a:1508071382704193616> ${target.tag} has no warnings.`);
+        return interaction.reply(`✅ ${target.tag} has no warnings.`);
       }
 
       const list = warns
@@ -955,7 +928,7 @@ client.on("interactionCreate", async (interaction) => {
 
       const embed = new EmbedBuilder()
         .setColor(0x8600FF)
-        .setTitle("<a:disclaimer_a:1507787788526026852> Warning History")
+        .setTitle("⚠️ Warning History")
         .setDescription(`👤 ${target.tag}\n\n${list}`)
         .setFooter({ text: `Total: ${warns.length}` })
         .setTimestamp();
@@ -979,7 +952,7 @@ client.on("interactionCreate", async (interaction) => {
 
       saveWarnings();
       return interaction.reply(
-        `<a:disclaimer_a:1507787788526026852> ${target.tag} warned.\nReason: ${reason}`
+        `⚠️ ${target.tag} warned.\nReason: ${reason}`
       );
     }
 
@@ -1000,7 +973,7 @@ client.on("interactionCreate", async (interaction) => {
       saveWarnings();
 
       return interaction.reply(
-        `<a:verify_a:1508071382704193616> Removed warning #${num} from ${target.tag}`
+        `✅ Removed warning #${num} from ${target.tag}`
       );
     }
 
@@ -1013,7 +986,7 @@ client.on("interactionCreate", async (interaction) => {
       saveWarnings();
 
       return interaction.reply(
-        `<a:verify_a:1508071382704193616> Cleared all warnings for ${target.tag}`
+        `✅ Cleared all warnings for ${target.tag}`
       );
     }
 
@@ -1025,7 +998,7 @@ client.on("interactionCreate", async (interaction) => {
       const data = mutes[target.id];
 
       if (!data || !data.history.length) {
-        return interaction.reply(`<a:verify_a:1508071382704193616> ${target.tag} has no mute history.`);
+        return interaction.reply(`✅ ${target.tag} has no mute history.`);
       }
 
       const text = data.history
@@ -1069,7 +1042,7 @@ client.on("interactionCreate", async (interaction) => {
 
       saveMutes();
       return interaction.reply(
-        `<a:verify_a:1508071382704193616> ${targetUser.tag} has been muted.\nReason: ${reason}`
+        `🔇 ${targetUser.tag} has been muted.\nReason: ${reason}`
       );
     }
 
@@ -1095,7 +1068,7 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       saveMutes();
-      return interaction.reply(`<a:verify_a:1508071382704193616> ${targetUser.tag} has been unmuted.`);
+      return interaction.reply(`🔊 ${targetUser.tag} has been unmuted.`);
     }
 
     /* --- BANHISTORY --- */
@@ -1106,7 +1079,7 @@ client.on("interactionCreate", async (interaction) => {
       const data = bans[target.id];
 
       if (!data || !data.history.length) {
-        return interaction.reply(`<a:verify_a:1508071382704193616> ${target.tag} has no ban history.`);
+        return interaction.reply(`✅ ${target.tag} has no ban history.`);
       }
 
       const text = data.history
@@ -1125,7 +1098,7 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.reply({ embeds: [embed] });
     }
 
- /* --- HELP MENU COMMAND --- */
+    /* --- HELP MENU COMMAND --- */
     if (commandName === "help") {
       const selectedCategory = interaction.options.getString("category") || "overview";
 
@@ -1133,18 +1106,16 @@ client.on("interactionCreate", async (interaction) => {
         if (cat === "info") {
           return new EmbedBuilder()
             .setColor(0x8600FF)
-            .setTitle("🌐 Eternal SMP • Server & General Commands")
+            .setTitle("🌐 Server & General Commands")
             .setDescription(
-              "• **`/ip`**\n" +
-              "  └ Display Java & Bedrock server connection details, ports, and website links.\n\n" +
               "• **`/rules`**\n" +
-              "  └ View the official Discord server rules and conduct policy.\n\n" +
+              "  └ View the official Discord server rules.\n\n" +
               "• **`/grules`**\n" +
-              "  └ Read Minecraft in-game gameplay restrictions and allowed modifications.\n\n" +
+              "  └ Read in-game gameplay restrictions and allowed modifications.\n\n" +
               "• **`/punishments`**\n" +
               "  └ View punishment ladders and enforcement guidelines.\n\n" +
               "• **`/tac`**\n" +
-              "  └ Read Eternal SMP store terms, conditions, and delivery policies.\n\n" +
+              "  └ Read server terms, conditions, and guidelines.\n\n" +
               "• **`/help [category]`**\n" +
               "  └ Open this interactive command directory."
             )
@@ -1153,29 +1124,10 @@ client.on("interactionCreate", async (interaction) => {
             .setTimestamp();
         }
 
-        if (cat === "store") {
-          return new EmbedBuilder()
-            .setColor(0x8600FF)
-            .setTitle("🛒 Eternal SMP • Store & Purchase Commands")
-            .setDescription(
-              "• **`/rank`**\n" +
-              "  └ Browse donor ranks (Knight, Hydra, Emperor, Phoenix, Booster) and kits.\n\n" +
-              "• **`/spawner`**\n" +
-              "  └ View prices and catalog for basic, combat, advanced, and special spawners.\n\n" +
-              "• **`/pay`**\n" +
-              "  └ Display manual payment numbers for bKash, Nagad, and Litecoin (LTC).\n\n" +
-              "• **`/panel`**\n" +
-              "  └ Deploy the interactive support ticket dropdown panel for members."
-            )
-            .setImage(BANNER)
-            .setFooter({ text: "Category: Store & Purchases" })
-            .setTimestamp();
-        }
-
         if (cat === "stats") {
           return new EmbedBuilder()
             .setColor(0x8600FF)
-            .setTitle("📊 Eternal SMP • Levels, Invites & Ranking")
+            .setTitle("📊 Levels, Invites & Ranking")
             .setDescription(
               "• **`/level [user]`**\n" +
               "  └ Check current chat level, XP progress, and visual status bar.\n\n" +
@@ -1194,10 +1146,10 @@ client.on("interactionCreate", async (interaction) => {
         if (cat === "games") {
           return new EmbedBuilder()
             .setColor(0x8600FF)
-            .setTitle("🎮 Eternal SMP • Mini-Games & Arcade")
+            .setTitle("🎮 Mini-Games & Arcade")
             .setDescription(
               "• **`/snake`**\n" +
-              "  └ Play the retro button-controlled Snake arcade game in Discord.\n\n" +
+              "  └ Play the retro button-controlled Snake arcade game.\n\n" +
               "• **`/tictactoe [mode] [opponent]`**\n" +
               "  └ Play Tic Tac Toe against an unbeatable AI or challenge a friend.\n\n" +
               "• **`/wordle`**\n" +
@@ -1205,7 +1157,7 @@ client.on("interactionCreate", async (interaction) => {
               "• **`/guess`**\n" +
               "  └ Guess the hidden number between 1 and 10,000.\n\n" +
               "• **`/howgay [user]`**\n" +
-              "  └ Fun meter calculating random rainbow affinity score."
+              "  └ Fun meter calculating random rainbow score."
             )
             .setImage(BANNER)
             .setFooter({ text: "Category: Mini-Games & Fun" })
@@ -1215,7 +1167,7 @@ client.on("interactionCreate", async (interaction) => {
         if (cat === "mod") {
           return new EmbedBuilder()
             .setColor(0xED4245)
-            .setTitle("🛡️ Eternal SMP • Staff & Moderation Commands")
+            .setTitle("🛡️ Staff & Moderation Commands")
             .setDescription(
               "• **`/warn [user] [reason]`** — Issue a server warning.\n" +
               "• **`/warnlist [user]`** — Inspect all active warnings on a user.\n" +
@@ -1236,23 +1188,21 @@ client.on("interactionCreate", async (interaction) => {
             .setTimestamp();
         }
 
-        // Default Overview Embed
         return new EmbedBuilder()
           .setColor(0x8600FF)
-          .setAuthor({ name: "Eternal SMP • Bot Directory", iconURL: THUMBNAIL })
-          .setTitle("📖 Eternal SMP Command Directory")
+          .setAuthor({ name: "Server Bot Directory", iconURL: THUMBNAIL })
+          .setTitle("📖 Command Directory")
           .setDescription(
-            "Welcome to the official **Eternal SMP** command manual.\n" +
-            "Select a module from the dropdown menu below or click the quick-category buttons to inspect commands, parameters, and usage.\n\n" +
+            "Welcome to the official server command manual.\n" +
+            "Select a module from the dropdown menu below to inspect commands, parameters, and usage.\n\n" +
             "**Directory Modules:**\n" +
-            "• **🌐 General & Server** — IP, rules, guidelines, and terms\n" +
-            "• **🛒 Store & Shop** — Ranks, spawner shop, tickets, and payment\n" +
+            "• **🌐 General & Server** — Rules, guidelines, and terms\n" +
             "• **📊 Levels & Invites** — Level progress, invite tracking, and leaderboards\n" +
             "• **🎮 Mini-Games** — Snake, TicTacToe, Wordle, and Guess games\n" +
             "• **🛡️ Staff Operations** — Full moderation suite and giveaway system"
           )
           .setImage(BANNER)
-          .setFooter({ text: "Use the dropdown or buttons below to browse" })
+          .setFooter({ text: "Use the dropdown below to browse" })
           .setTimestamp();
       }
 
@@ -1261,8 +1211,7 @@ client.on("interactionCreate", async (interaction) => {
         .setPlaceholder("Select a command module to inspect")
         .addOptions([
           { label: "Overview", description: "Main directory page", emoji: "📖", value: "overview" },
-          { label: "General & Server Info", description: "IP, server rules, and official links", emoji: "🌐", value: "info" },
-          { label: "Store & Economy", description: "Ranks, spawners, payments, and tickets", emoji: "🛒", value: "store" },
+          { label: "General & Server Info", description: "Server rules and guidelines", emoji: "🌐", value: "info" },
           { label: "Levels & Invites", description: "Level cards, invite stats, and leaderboards", emoji: "📊", value: "stats" },
           { label: "Mini-Games & Fun", description: "Snake, TicTacToe, Wordle, and Guess", emoji: "🎮", value: "games" },
           { label: "Staff & Moderation", description: "Warns, mutes, bans, and giveaways", emoji: "🛡️", value: "mod" }
@@ -1300,7 +1249,7 @@ client.on("interactionCreate", async (interaction) => {
 
       return;
     }     
-      
+
     /* --- LEVEL --- */
     if (commandName === "level") {
       const targetUser = interaction.options.getUser("user") || interaction.user;
@@ -1344,22 +1293,22 @@ client.on("interactionCreate", async (interaction) => {
         .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
         .setDescription(
           `👤 **User:** ${targetUser.tag}\n\n` +
-          `<a:verify_a:1508071382704193616> **Total Invites:** ${data.total}\n` +
-          `<:tik:1518250029695893525> **Current Invites:** ${data.current}\n` +
-          `<a:disclaimer_a:1507787788526026852> **Left Invites:** ${data.left}\n` +
-          `<:incorrect:1518250261502754989> **Fake Invites:** ${data.fake}\n\n` +
+          `✅ **Total Invites:** ${data.total}\n` +
+          `✨ **Current Invites:** ${data.current}\n` +
+          `⚠️ **Left Invites:** ${data.left}\n` +
+          `❌ **Fake Invites:** ${data.fake}\n\n` +
           `📜 **Total Joins Tracked:** ${totalHistory}`
         )
         .addFields(
           {
-            name: "<a:magic_book:1507790392945410299> Breakdown",
+            name: "📋 Breakdown",
             value:
-              `<:tik:1518250029695893525> Real Invites: ${data.current}\n` +
-              `<a:disclaimer_a:1507787788526026852> Fake Invites: ${data.fake}\n` +
-              `<:incorrect:1518250261502754989> Left Users: ${data.left}`
+              `Real Invites: ${data.current}\n` +
+              `Fake Invites: ${data.fake}\n` +
+              `Left Users: ${data.left}`
           },
           {
-            name: "<:umm_really:1517961187998961806> Efficiency",
+            name: "📈 Efficiency",
             value:
               data.total > 0
                 ? `${Math.floor((data.current / data.total) * 100)}% Real Invites`
@@ -1382,10 +1331,10 @@ client.on("interactionCreate", async (interaction) => {
         .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
         .setDescription(
           `👤 **User:** ${targetUser.tag}\n\n` +
-          `<a:verify_a:1508071382704193616> **Total Invites:** ${data.total}\n` +
-          `<:tik:1518250029695893525> **Current Invites:** ${data.current}\n` +
-          `<:incorrect:1518250261502754989> **Left Invites:** ${data.left}\n` +
-          `<a:disclaimer_a:1507787788526026852> **Fake Invites:** ${data.fake}`
+          `✅ **Total Invites:** ${data.total}\n` +
+          `✨ **Current Invites:** ${data.current}\n` +
+          `❌ **Left Invites:** ${data.left}\n` +
+          `⚠️ **Fake Invites:** ${data.fake}`
         )
         .setFooter({ text: "Use /invitedashboard for full stats view" })
         .setTimestamp();
@@ -1411,12 +1360,12 @@ client.on("interactionCreate", async (interaction) => {
 
       const giveawayEmbed = new EmbedBuilder()
         .setColor(0x8600FF)
-        .setTitle("🎉 ETERNAL SMP • GIVEAWAY 🎉")
+        .setTitle("🎉 SERVER GIVEAWAY 🎉")
         .setDescription(
-          `<:money:1507752623971893470> **Prize:** ${prize}\n` +
-          `<a:twinkle_twinkle:1507788149030392000> **Hosted by:** ${interaction.user}\n` +
-          `<a:twinkle_twinkle:1507788149030392000> **Winners:** **${winnerCount}**\n` +
-          `<a:magic_book:1507790392945410299> **Ends:** <t:${endTimestamp}:R> (<t:${endTimestamp}:f>)\n\n` +
+          `🎁 **Prize:** ${prize}\n` +
+          `👑 **Hosted by:** ${interaction.user}\n` +
+          `👥 **Winners:** **${winnerCount}**\n` +
+          `⏳ **Ends:** <t:${endTimestamp}:R> (<t:${endTimestamp}:f>)\n\n` +
           `Click the **🎉 Enter** button below to participate!`
         )
         .setImage(BANNER)
@@ -1437,7 +1386,6 @@ client.on("interactionCreate", async (interaction) => {
         fetchReply: true
       });
 
-      // Saves giveaway data permanently to disk
       activeGiveaways.push({
         messageId: giveawayMsg.id,
         channelId: interaction.channelId,
@@ -1461,7 +1409,7 @@ client.on("interactionCreate", async (interaction) => {
       const gw = activeGiveaways.find((g) => g.messageId === targetId);
 
       if (!gw) {
-        return interaction.reply({ content: "❌ Could not find an active or saved giveaway with that message ID!", ephemeral: true });
+        return interaction.reply({ content: "❌ Could not find a giveaway with that message ID!", ephemeral: true });
       }
 
       if (!gw.ended) {
@@ -1472,7 +1420,6 @@ client.on("interactionCreate", async (interaction) => {
         return interaction.reply({ content: "❌ Cannot reroll: There were no valid entries in that giveaway.", ephemeral: true });
       }
 
-      // Select a random entrant from the saved entries pool
       const newWinner = gw.entries[Math.floor(Math.random() * gw.entries.length)];
 
       return interaction.reply({
@@ -1480,165 +1427,29 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
-/* --- SERVER IP & CONNECTION DETAILS --- */
-    if (commandName === "ip") {
-      const embed = new EmbedBuilder()
-        .setColor(0x8600FF)
-        .setAuthor({
-          name: "Eternal SMP • Server Connection",
-          iconURL: interaction.guild.iconURL() || THUMBNAIL
-        })
-        .setTitle("<a:fire_a0:1507790340067950794> Join the Realm of Eternal SMP")
-        .setDescription(
-          "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-          "### 💻 Java Edition (PC)\n" +
-          "**Server IP:**\n" +
-          "```play.eternal-smp.pro```\n" +
-          "**Port:**\n" +
-          "```12003```\n" +
-          "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-          "### 📱 Bedrock Edition (PE / Console / Win10)\n" +
-          "**Server IP:**\n" +
-          "```play.eternal-smp.pro:12003```\n" +
-          "**Port:**\n" +
-          "```12003```\n" +
-          "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-          "### 🌐 Official Links\n" +
-          "• **Website:** [ETERNAL SMP WEBSITE](https://www.eternal-smp.pro/)\n" +
-          "• **Store:** [ETERNAL SMP STORE](https://www.eternal-smp.pro/shop.html)\n" +
-          "• **Leaderboard:** [ETERNAL SMP LEADERBOARD](https://www.eternal-smp.pro/leaderboard.html)\n" +
-          "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        )
-        .setImage(BANNER)
-        .setFooter({ text: "Compatible with Minecraft 1.20 - 26.2" })
-        .setTimestamp();
-
-      // Clickable external web link buttons
-      const linkRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setLabel("Official Website")
-          .setStyle(ButtonStyle.Link)
-          .setEmoji("🌐")
-          .setURL("https://www.eternal-smp.pro/"),
-        new ButtonBuilder()
-          .setLabel("Webstore")
-          .setStyle(ButtonStyle.Link)
-          .setEmoji("🛒")
-          .setURL("https://www.eternal-smp.pro/shop.html"),
-        new ButtonBuilder()
-          .setLabel("Gallery")
-          .setStyle(ButtonStyle.Link)
-          .setEmoji("🏞️")
-          .setURL("https://www.eternal-smp.pro/gallery.html")
-      );
-
-      return interaction.reply({ embeds: [embed], components: [linkRow] });
-    }      
-      
-    /* --- PAY --- */
-    if (commandName === "pay") {
-      const embed = new EmbedBuilder()
-        .setColor(0x8600FF)
-        .setTitle("💰 Eternal SMP Payment Methods")
-        .setDescription(
-          "**<a:arrow:1507782135212150845> Bkash 1 (Personal → Personal):** 01741644334\n\n" +
-          "**<a:arrow:1507782135212150845> Bkash 2 (Agent / Personal → Personal):** 01768166414\n\n" +
-          "<:shoppie:1507809836421873725> Send screenshot in support ticket after payment!"
-        )
-        .setImage(BANNER)
-        .setFooter({ text: "Eternal SMP Store" })
-        .setTimestamp();
-
-      return interaction.reply({ embeds: [embed] });
-    }
-
     /* --- RULES --- */
     if (commandName === "rules") {
       const embed = new EmbedBuilder()
         .setColor(0x8600FF)
-        .setTitle("<a:magic_book:1507790392945410299> Eternal SMP — Official Server Rules")
+        .setTitle("📜 Server Rules")
         .setDescription(`
-# <a:magic_book:1507790392945410299> Eternal SMP — Official Server Rules
-
+# 📜 Server Rules
 ━━━━━━━━━━━━━━
+## 💬 **1. Chat Rules**
+Keep chat friendly, clean, and respectful. Toxicity, harassment, discrimination, spam, and NSFW are strictly prohibited.
 
-## <a:chats:1507788455558512691> **1. Chat Rules**
-<a:red_arrow:1507787736554410126> Keep the chat clean, friendly, and respectful. Toxicity, harassment, hate speech, discrimination, excessive swearing, spam, or inappropriate behavior is strictly prohibited.
+## 🎮 **2. Fair Play**
+No cheating, exploiting, or taking unfair advantage over other community members.
 
-━━━━━━━━━━━━━━
+## 🛡️ **3. Discord Terms**
+Follow Discord's Terms of Service and Community Guidelines at all times.
 
-## <a:sweaty_gamer:1507788395714445515> **2. Fair Gameplay**
-<a:red_arrow:1507787736554410126> Using cheats, hacks, x-ray, auto-clickers, exploits, dupes, modified clients, or any unfair advantages is not allowed. Play fairly and respect the survival experience.
-
-━━━━━━━━━━━━━━
-
-## <a:disclaimer_a:1507787788526026852> **3. Banned Farms & Lag Machines**
-<a:red_arrow:1507787736554410126> Do not build farms, redstone machines, chunk loaders, or structures that may cause excessive lag or harm server performance. Staff may remove lag-causing builds without warning.
-
-━━━━━━━━━━━━━━
-
-## <a:announcement_a:1507790462210281482> **4. Proper Channel Usage**
-<a:red_arrow:1507787736554410126> Use channels correctly and avoid unnecessary spam, advertising, or disruptive behavior. Keep conversations meaningful and respectful.
-
-━━━━━━━━━━━━━━
-
-## <a:disclaimer_a:1507787788526026852> **5. No Begging**
-<a:red_arrow:1507787736554410126> Do not beg for ranks, items, money, permissions, staff roles, or special treatment from staff or players.
-
-━━━━━━━━━━━━━━
-
-## <a:disclaimer_a:1507787788526026852> **6. Follow Discord Guidelines**
-<a:red_arrow:1507787736554410126> All members must follow the official Discord Community Guidelines and Terms of Service at all times.
-
-━━━━━━━━━━━━━━
-
-## <a:announcement_a:1507790462210281482> **7. Voice Chat Rules**
-<a:red_arrow:1507787736554410126> Keep VC conversations friendly and appropriate. Mic spam, earrape, excessive background noise, harassment, or disturbing others is not allowed.
-
-━━━━━━━━━━━━━━
-
-## <a:moneyyyy:1507792459974054118> **8. No Real Money Trading**
-<a:red_arrow:1507787736554410126> Trading in-game items, accounts, or services for real money outside the official server store is strictly prohibited.
-
-━━━━━━━━━━━━━━
-
-## <a:store_a:1507788568322375690> **9. Store & Rank Purchase Policy**
-<a:red_arrow:1507787736554410126> All purchases made through the official server store are final.
-<a:red_arrow:1507787736554410126> Purchased ranks, kits, or items will be delivered after successful payment verification.
-<a:red_arrow:1507787736554410126> Sharing or abusing paid perks may result in punishment or removal of perks.
-<a:red_arrow:1507787736554410126> Chargebacks or fraudulent payments will result in a permanent blacklist from the server and store.
-
-━━━━━━━━━━━━━━
-
-## <a:disclaimer_a:1507787788526026852> **10. Refund Policy**
-<a:red_arrow:1507787736554410126> No refunds will be given after ranks, items, or perks are delivered.
-<a:red_arrow:1507787736554410126> Accidental purchases are the buyer’s responsibility.
-<a:red_arrow:1507787736554410126> Breaking server rules after purchasing does NOT make you eligible for a refund.
-<a:red_arrow:1507787736554410126> If you experience delivery issues, contact staff with valid proof.
-
-━━━━━━━━━━━━━━
-
-## <a:disclaimer_a:1507787788526026852> **11. Punishment System**
-<a:red_arrow:1507787736554410126> Warning
-<a:red_arrow:1507787736554410126> Mute
-<a:red_arrow:1507787736554410126> Kick
-<a:red_arrow:1507787736554410126> Temporary Ban
-<a:red_arrow:1507787736554410126> Permanent Ban
-
-<a:red_arrow:1507787736554410126> Severe violations such as hacking, duping, scamming, or chargebacks may result in immediate permanent punishment without warning.
-
-━━━━━━━━━━━━━━
-
-## <a:announcement_a:1507790462210281482> **12. Use Common Sense**
-<a:red_arrow:1507787736554410126> Not every situation can be covered by rules. Use common sense and respect staff decisions to help maintain a positive and fair community.
-
-━━━━━━━━━━━━━━
-
-# **<a:twinkle_twinkle:1507788149030392000> Welcome to Eternal SMP <a:twinkle_twinkle:1507788149030392000>**
-`)
+## ⚖️ **4. Moderation**
+Staff decisions are final. Use common sense.
+        `)
         .setThumbnail(THUMBNAIL)
         .setImage(BANNER)
-        .setFooter({ text: "Eternal SMP Rules" })
+        .setFooter({ text: "Server Rules" })
         .setTimestamp();
 
       return interaction.reply({ embeds: [embed] });
@@ -1648,52 +1459,18 @@ client.on("interactionCreate", async (interaction) => {
     if (commandName === "grules") {
       const embed = new EmbedBuilder()
         .setColor(0x8600FF)
-        .setTitle("<a:disclaimer_a:1507787788526026852> Eternal SMP • In-Game Rules")
-        .setDescription(` 
-# **<a:disclaimer_a:1507787788526026852> Minecraft Server Rules**
+        .setTitle("⚔️ In-Game Rules")
+        .setDescription(`
+# **In-Game Rules**
 ━━━━━━━━━━━━━━━━━━━━━━━━
-
-<a:red_arrow:1507787736554410126> No More Than 3 Accounts Per Player
-<a:red_arrow:1507787736554410126> No Hacked Clients
-<a:red_arrow:1507787736554410126> No Movement Mods
-<a:red_arrow:1507787736554410126> No Inventory Mods
-<a:red_arrow:1507787736554410126> No Health Indicators
-<a:red_arrow:1507787736554410126> No Radar
-<a:red_arrow:1507787736554410126> No Freecam
-<a:red_arrow:1507787736554410126> No ESP
-<a:red_arrow:1507787736554410126> No Auto Place / Easy Place
-<a:red_arrow:1507787736554410126> No Macros or Scripts
-<a:red_arrow:1507787736554410126> No Auto Clickers
-<a:red_arrow:1507787736554410126> No Mouse Tweaks / Scrollers
-<a:red_arrow:1507787736554410126> No Crafting Modifications
-<a:red_arrow:1507787736554410126> No Bug Abuse
-<a:red_arrow:1507787736554410126> No Attempted Duplication
-<a:red_arrow:1507787736554410126> No Item Duplication
-<a:red_arrow:1507787736554410126> No IRL Trading
-<a:red_arrow:1507787736554410126> No External Gambling
-<a:red_arrow:1507787736554410126> No Cross-Server Trading
-<a:red_arrow:1507787736554410126> No Staff Impersonation
-<a:red_arrow:1507787736554410126> No Finding or Using the Server Seed
-<a:red_arrow:1507787736554410126> No Voice Chat Spam
-<a:red_arrow:1507787736554410126> Report All Bugs, Glitches & Cheaters
-<a:red_arrow:1507787736554410126> No Auto Totem
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-# **<a:magic_book:1507790392945410299> Chat Rules**
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-<a:red_arrow:1507787736554410126> No Spamming
-<a:red_arrow:1507787736554410126> No Encouraging Others to Spam
-<a:red_arrow:1507787736554410126> No Harassment
-<a:red_arrow:1507787736554410126> No Discrimination or Hate Speech
-<a:red_arrow:1507787736554410126> No Death Threats
-<a:red_arrow:1507787736554410126> No Sharing Personal Information
-<a:red_arrow:1507787736554410126> No Pretending to Be Staff
-<a:red_arrow:1507787736554410126> No Ban Evasion
-<a:red_arrow:1507787736554410126> Use Common Sense
-`)
+• No hacked clients, movement mods, or auto-clickers.
+• No exploiting, duplicating items, or bug abuse.
+• No IRL trading or scamming players.
+• Report all bugs directly to server staff.
+• Respect server limits and keep farming automated machines clean.
+        `)
         .setImage(BANNER)
-        .setFooter({ text: "Eternal SMP In-Game Rules" })
+        .setFooter({ text: "In-Game Rules" })
         .setTimestamp();
 
       return interaction.reply({ embeds: [embed] });
@@ -1703,77 +1480,19 @@ client.on("interactionCreate", async (interaction) => {
     if (commandName === "punishments") {
       const embed = new EmbedBuilder()
         .setColor(0x8600FF)
-        .setTitle("⚖️ Eternal SMP • Punishment System")
+        .setTitle("⚖️ Punishment System")
         .setDescription(`
+# **Punishment Ladder**
 ━━━━━━━━━━━━━━━━━━━━━━━━
-# **<a:announcement_a:1507790462210281482> Punishment System**
-━━━━━━━━━━━━━━━━━━━━━━━━
+1. **Warning** — First-time or minor offenses.
+2. **Mute / Timeout** — Repeated chat disruptions or mild toxicity.
+3. **Kick / Temp Ban** — Severe violations or repeated infractions.
+4. **Permanent Ban** — Malicious exploits, severe harassment, or intentional disruption.
 
-<a:red_arrow:1507787736554410126> Most violations will result in a Warning first.
-
-<a:red_arrow:1507787736554410126> Repeated violations may result in Mutes, Jail, Position Freeze, Inventory Clears, Temporary Bans, or Permanent Bans.
-
-━━━━━━━━━━━━━━
-
-<a:red_arrow:1507787736554410126> Chat Spam
-Warning → Mute → Temporary Ban
-
-<a:red_arrow:1507787736554410126> Harassment, Toxicity & Hate Speech
-Warning → Mute → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Staff Impersonation
-Warning → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Ban Evasion
-Permanent Ban
-
-<a:red_arrow:1507787736554410126> IRL Trading
-Warning → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> External Gambling
-Warning → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Cross-Server Trading
-Warning → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Using More Than 3 Accounts
-Warning → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Bug Abuse
-Warning → Inventory Clear → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Attempted Duplication
-Warning → Inventory Clear → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Item Duplication
-Inventory Clear → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Auto Totem, Macros, Scripts & Auto Clickers
-Warning → Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Hacked Clients, ESP, Freecam, Radar & Similar Cheats
-Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Server Seed Finding or Usage
-Temporary Ban → Permanent Ban
-
-<a:red_arrow:1507787736554410126> Severe Exploits Affecting the Economy
-Inventory Clear → Temporary Ban → Permanent Ban
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-# **<a:disclaimer_a:1507787788526026852> Final Notice**
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-<a:arrow:1507782135212150845> Staff may issue harsher punishments immediately for severe offenses.
-
-<a:arrow:1507782135212150845> Punishments are based on evidence, severity, and previous violations.
-
-<a:arrow:1507782135212150845> Use common sense and respect staff decisions. Staff decision will be considered as the final desicion.
-
-━━━━━━━━━━━━━━
-`)
+*Staff reserve the right to elevate penalties based on severity and context.*
+        `)
         .setImage(BANNER)
-        .setFooter({ text: "Eternal SMP In-Game Rules" })
+        .setFooter({ text: "Punishment System" })
         .setTimestamp();
 
       return interaction.reply({ embeds: [embed] });
@@ -1783,272 +1502,18 @@ Inventory Clear → Temporary Ban → Permanent Ban
     if (commandName === "tac") {
       const embed = new EmbedBuilder()
         .setColor(0x8600FF)
+        .setTitle("📋 Terms and Conditions")
         .setDescription(`
+# **Terms and Conditions**
 ━━━━━━━━━━━━━━━━━━━━━━
-**<:shoppie:1507809836421873725> Eternal SMP • Store Terms**
-━━━━━━━━━━━━━━━━━━━━━━
+By interacting with this server and our services, you agree to comply with our community standards. 
 
-<a:red_arrow:1507787736554410126> Purchasing any Rank, Package, Crate, or Digital Item from the Eternal SMP Store means you agree to all terms and conditions listed below.
-
-━━━━━━━━━━━━━━━━━━━━━━
-**<a:announcement_a:1507790462210281482> Legal Disclaimer**
-━━━━━━━━━━━━━━━━━━━━━━
-
-<a:red_arrow:1507787736554410126> Eternal SMP is an independent Minecraft community and is not affiliated with, endorsed by, or associated with Mojang Studios, Microsoft, or Minecraft.
-
-<a:red_arrow:1507787736554410126> All purchases are voluntary contributions made to support the server, community, and future development.
-
-━━━━━━━━━━━━━━━━━━━━━━
-**<a:moneyyyy:1507792459974054118> Payments & Purchases**
-━━━━━━━━━━━━━━━━━━━━━━
-
-<a:arrow:1507782135212150845> Digital Products
-All ranks, packages, perks, crates, and items are digital content delivered in-game. No physical products will be shipped.
-
-<a:arrow:1507782135212150845> Server Support
-Payments help fund server hosting, protection, maintenance, development, updates, performance improvements, and community events.
-
-<a:arrow:1507782135212150845> No Refund Policy
-All purchases are final and non-refundable once payment has been successfully completed and rewards are delivered.
-
-<a:arrow:1507782135212150845> Fraud & Chargebacks
-Any chargeback, payment dispute, or fraudulent transaction may result in permanent suspension from Eternal SMP, including loss of all purchased items and store access.
-
-━━━━━━━━━━━━━━━━━━━━━━
-**<a:crown_a:1507791684208033842> Ranks & Perks**
-━━━━━━━━━━━━━━━━━━━━━━
-
-<a:arrow:1507782135212150845> Rank Duration
-Ranks may be permanent, seasonal, or subscription-based depending on the product description in the store.
-
-<a:arrow:1507782135212150845> Perk Balancing
-To maintain fair gameplay and server balance, rank perks, commands, or bonuses may be adjusted, modified, or removed at any time without prior notice.
-
-<a:arrow:1507782135212150845> Rule Violations
-Breaking server or Discord rules may result in warnings, suspensions, permanent bans, or removal of purchased perks without refund.
-
-━━━━━━━━━━━━━━━━━━━━━━
-**<a:online:1507791786943447173> Server Availability**
-━━━━━━━━━━━━━━━━━━━━━━
-
-<a:arrow:1507782135212150845> Maintenance & Downtime
-The server may occasionally experience downtime due to maintenance, updates, technical issues, or unexpected outages. Downtime does not qualify for refunds or compensation.
-
-<a:arrow:1507782135212150845> Server Changes
-Eternal SMP reserves the right to modify gameplay systems, economy features, ranks, plugins, worlds, or server mechanics at any time to improve the community experience.
-
-━━━━━━━━━━━━━━━━━━━━━━
-**<a:disclaimer_a:1507787788526026852> Account Responsibility**
-━━━━━━━━━━━━━━━━━━━━━━
-
-<a:red_arrow:1507787736554410126> Players are fully responsible for the security and ownership of their Minecraft and Discord accounts.
-
-<a:red_arrow:1507787736554410126> Eternal SMP is not responsible for lost, stolen, hacked, or shared accounts.
-
-━━━━━━━━━━━━━━━━━━━━━━
-**<a:disclaimer_a:1507787788526026852> Item Loss Policy**
-━━━━━━━━━━━━━━━━━━━━━━
-
-<a:red_arrow:1507787736554410126> Some items, kits, or rewards may be limited or non-renewable.
-
-<a:red_arrow:1507787736554410126> Lost items caused by death, PvP, clearing inventories, glitches, or player mistakes will generally not be restored unless approved by staff under exceptional circumstances.
-
-━━━━━━━━━━━━━━━━━━━━━━
-**<:damn:1507752860643885076> Agreement**
-━━━━━━━━━━━━━━━━━━━━━━
-
-<a:red_arrow:1507787736554410126> By completing a purchase from the Eternal SMP Store, you confirm that you have read, understood, and accepted all Store Terms and Server Rules.
-
-━━━━━━━━━━━━━━━━━━━━━━
-**<a:fire_a0:1507790340067950794> Thank You for Supporting Eternal SMP
-Your support helps keep the server alive, balanced, and growing for the entire community. <a:fire_a0:1507790340067950794>**
-━━━━━━━━━━━━━━━━━━━━━━
-`)
+• **Account Responsibility:** You are solely responsible for actions performed from your account.
+• **Modifications:** Server rules, roles, and systems may adapt over time for server health.
+• **Agreement:** Continuous stay within this Discord community constitutes acceptance of these terms.
+        `)
         .setImage(BANNER)
-        .setFooter({ text: "Eternal SMP Store Terms" })
-        .setTimestamp();
-
-      return interaction.reply({ embeds: [embed] });
-    }
-
-    /* --- RANK --- */
-    if (commandName === "rank") {
-      const embed1 = new EmbedBuilder()
-        .setColor(0x8600FF)
-        .setTitle("<a:fire_a0:1507790340067950794> ETERNAL SMP • Rank List")
-        .setDescription(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-**<:shield_0:1507754792334790757> KNIGHT <:shield_0:1507754792334790757>** 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<a:moneyyyy:1507792459974054118> In-game Money: 250K  
-<a:red_arrow:1507787736554410126> 4 SetHomes  
-<a:red_arrow:1507787736554410126> KNIGHT ARMOR (Daimond Vanilla Max Enchants) 
-<a:red_arrow:1507787736554410126> KNIGHT TOOLS (Daimond Vanilla Max Enchants)
-<a:red_arrow:1507787736554410126> 3 Shulker Boxes
-<a:red_arrow:1507787736554410126> 64 Golden Apple + 9 GOD Apple  
-<a:red_arrow:1507787736554410126> Common Trims Collection
-<a:red_arrow:1507787736554410126> 2 Common Spawners / 4 Common Keys
-<a:red_arrow:1507787736554410126> 10k Claim Blocks
-⚡ Commands  
-/ptime /near /hat  
-
-**<a:moneyyyy:1507792459974054118> PRICE – 120৳**
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-**<a:twinkle_twinkle:1507788149030392000> HYDRA <a:twinkle_twinkle:1507788149030392000>**
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<a:moneyyyy:1507792459974054118> In-game Money: 500K Money  
-<a:red_arrow:1507787736554410126> 5 SetHomes  
-<a:red_arrow:1507787736554410126> HYDRA ARMOR (Netherite Vanilla Max Enchants) 
-<a:red_arrow:1507787736554410126> HYDRA TOOLS (Netherite Vanilla Max Enchants)  
-<a:red_arrow:1507787736554410126> 5 Shulker Boxes 
-<a:red_arrow:1507787736554410126> 96 Golden Apple + 10 GOD Apple  
-<a:red_arrow:1507787736554410126> Uncommon Trims Collection
-<a:red_arrow:1507787736554410126> 2 Uncommon Spawners / 6 Common Keys 
-<a:red_arrow:1507787736554410126> 15k Claim Blocks
-
-⚡ KNIGHT Commands + 
-/workbench /echest /back /nick 
-
-**<a:moneyyyy:1507792459974054118> PRICE – 220৳**
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-**<a:fire_a0:1507790340067950794> EMPEROR <a:fire_a0:1507790340067950794>**
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<a:moneyyyy:1507792459974054118> In-game Money: 750K Money  
-<a:red_arrow:1507787736554410126> 6 SetHomes  
-<a:red_arrow:1507787736554410126> EMPEROR GEAR (Vanilla Max Enchants)
-<a:red_arrow:1507787736554410126> EMPEROR MACE (Wind Burst & Density)
-<a:red_arrow:1507787736554410126> 6 Shulker  
-<a:red_arrow:1507787736554410126> 128 Golden Apple + 16 GOD Apple
-<a:red_arrow:1507787736554410126> Rare Trims Collection
-<a:red_arrow:1507787736554410126> 2 Rare Spawners / 2 OP Keys
-<a:red_arrow:1507787736554410126> 20k Claim Blocks
-
-⚡ HYDRA Commands +  
-/disposal /smithingtable /loom /repair hand
-
-**<a:moneyyyy:1507792459974054118> PRICE – 320৳**
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-**<a:symbol_eternity:1507813262756937871> PHOENIX <a:symbol_eternity:1507813262756937871>** 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<a:moneyyyy:1507792459974054118> In-game Money: 1.5M Money  
-<a:red_arrow:1507787736554410126> 8 SetHomes  
-<a:red_arrow:1507787736554410126> Elytra ×1   
-<a:red_arrow:1507787736554410126> Full Max-Custom Gear
-<a:red_arrow:1507787736554410126> ETERNAL SWORD (Custom Enchants)
-<a:red_arrow:1507787736554410126> ETERNAL PICKAXE (Custom Enchants)
-<a:red_arrow:1507787736554410126> ETERNAL MACE (Custom Enchants)
-<a:red_arrow:1507787736554410126> ETERNAL SPEAR (Custom Enchants)
-<a:red_arrow:1507787736554410126> 8 Shulker  
-<a:red_arrow:1507787736554410126> 192 Golden Apple + 20 GOD Apple  
-<a:red_arrow:1507787736554410126> Legendary Trims Collection
-<a:red_arrow:1507787736554410126> 2 Advance Spawners / 2 ETERNAL Keys
-<a:red_arrow:1507787736554410126> 30k Claim Blocks
-
-⚡ EMPEROR Commands +  
-/heal /night /anvil
-
-**<a:moneyyyy:1507792459974054118> PRICE – 420৳**
-      `);
-
-      const embed2 = new EmbedBuilder()
-        .setColor(0x8600FF)
-        .setTitle("<a:booster:1507826062489424093> BOOSTER SPECIAL RANK <a:booster:1507826062489424093>")
-        .setDescription(`
-<a:moneyyyy:1507792459974054118> In-game Money: 500K Money  
-<a:red_arrow:1507787736554410126> 4 SetHomes   
-<a:red_arrow:1507787736554410126> Custom BOOSTER ARMOR (Diamond Vanilla Max Enchant)
-<a:red_arrow:1507787736554410126> BOOSTER TOOLS (Netherite VAnilla Max Enchant)
-<a:red_arrow:1507787736554410126> 4 Shulker  
-<a:red_arrow:1507787736554410126> 70 Golden Apple + 7 GOD Apple  
-<a:red_arrow:1507787736554410126> 2 Uncommon Spawner / 4 Common Keys
-<a:red_arrow:1507787736554410126> 15k Claim Blocks
-
-⚡ KNIGHT Commands +  
-/echest /back
-
-**<a:moneyyyy:1507792459974054118> PRICE – 2 Server Boost**
-      `)
-        .setImage(BANNER)
-        .setFooter({ text: "Eternal SMP Rank System" })
-        .setTimestamp();
-
-      return interaction.reply({ embeds: [embed1, embed2] });
-    }
-
-    /* --- SPAWNER --- */
-    if (commandName === "spawner") {
-      const embed = new EmbedBuilder()
-        .setColor(0x8600FF)
-        .setTitle("<a:magic_book:1507790392945410299> ETERNAL SMP • Spawner Shop")
-        .setDescription(`
-━━━━━━━━━━━━━━━━━━━━━━
-
-**<a:chikku_a:1507790277853843676> BASIC SPAWNERS – 20৳ (Per Piece)**
-
-<a:arrow:1507782135212150845> Pig
-<a:arrow:1507782135212150845> Cow
-<a:arrow:1507782135212150845> Chicken
-<a:arrow:1507782135212150845> Sheep
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-**<a:fire_a0:1507790340067950794> COMBAT SPAWNERS – 30৳ (Per Piece)**
-
-<a:arrow:1507782135212150845> Zombie
-<a:arrow:1507782135212150845> Spider
-<a:arrow:1507782135212150845> Skeleton
-<a:arrow:1507782135212150845> Guardian
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-**<a:enderman_dance:1507790630984749299> ADVANCED SPAWNERS – 40৳ (Per Piece)**
-
-<a:arrow:1507782135212150845> Enderman
-<a:arrow:1507782135212150845> Slime
-<a:arrow:1507782135212150845> Magma Cube
-<a:arrow:1507782135212150845> Creeper
-<a:arrow:1507782135212150845> Blaze
-<a:arrow:1507782135212150845> Zombified Piglin (Gold Farming)
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-**<a:twinkle_twinkle:1507788149030392000> SPECIAL SPAWNERS – 50৳ (Per Piece)**
-
-<a:arrow:1507782135212150845> Iron Golem (Iron Farming)
-<a:arrow:1507782135212150845> Ghast (Ghast Tears & Gunpowder)
-<a:arrow:1507782135212150845> Breeze (Breeze Rod)
-<a:arrow:1507782135212150845> Wither Skeleton (Wither Skulls & Coal)
-<a:arrow:1507782135212150845> Shulker
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-**<a:disclaimer_a:1507787788526026852> Balance Notice**
-
-<a:red_arrow:1507787736554410126> High-tier spawners are limited and may be adjusted for server balance.
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-**<a:note_a:1507787693990609007> Note:**
-
-<a:red_arrow:1507787736554410126> Spawner list & prices may change anytime for balance
-<a:red_arrow:1507787736554410126> Some spawners may be limited
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-**<a:store_a:1507788568322375690> How to Buy:**
-
-<a:red_arrow:1507787736554410126> Open a ticket in the support channel
-<a:red_arrow:1507787736554410126> Tell staff which spawner you want
-`)
-        .setImage(BANNER)
-        .setFooter({ text: "Eternal SMP Spawner Shop" })
+        .setFooter({ text: "Terms and Conditions" })
         .setTimestamp();
 
       return interaction.reply({ embeds: [embed] });
@@ -2064,10 +1529,10 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       const embed = new EmbedBuilder()
         .setColor(0xFF69B4)
-        .setTitle("🏳️‍🌈 Gay-O-Meter")
+        .setTitle("🏳️‍🌈 Fun-O-Meter")
         .setDescription(
           `**Target:** ${user}\n\n` +
-          `**Gay Level:** ${gayPercent}%\n` +
+          `**Rating:** ${gayPercent}%\n` +
           `${filled}${empty}\n\n` +
           `*This is just for fun! Results are completely random.*`
         )
@@ -2082,28 +1547,21 @@ Your support helps keep the server alive, balanced, and growing for the entire c
     if (commandName === "panel") {
       const embed = new EmbedBuilder()
         .setColor(0x8600FF)
-        .setTitle("🎟️ Eternal SMP Ticket System")
+        .setTitle("🎟️ Server Support Ticket System")
         .setDescription(
           "Select a ticket type from the dropdown menu below.\n\n" +
-          "<a:moneyyyy:1507792459974054118> Purchase Support\n" +
-          "❓ General Support\n" +
-          "<a:disclaimer_a:1507787788526026852> Player Reports\n" +
-          "<a:disclaimer_a:1507787788526026852> Ban Appeals"
+          "❓ **General Support**\n" +
+          "🛡️ **Player Reports**\n" +
+          "⚖️ **Punishment Appeals**"
         )
         .setImage(BANNER)
         .setThumbnail(THUMBNAIL)
-        .setFooter({ text: "Eternal SMP Support Center" });
+        .setFooter({ text: "Support Center" });
 
       const menu = new StringSelectMenuBuilder()
         .setCustomId("ticket_menu")
         .setPlaceholder("Select a ticket type")
         .addOptions([
-          {
-            label: "Purchase Support",
-            description: "Buy ranks, crates, spawners",
-            emoji: "<a:moneyyyy:1507792459974054118>",
-            value: "purchase"
-          },
           {
             label: "General Support",
             description: "Need help from staff",
@@ -2112,14 +1570,14 @@ Your support helps keep the server alive, balanced, and growing for the entire c
           },
           {
             label: "Player Report",
-            description: "Report a player",
-            emoji: "<a:disclaimer_a:1507787788526026852>",
+            description: "Report a rule violator",
+            emoji: "🛡️",
             value: "report"
           },
           {
-            label: "Ban Appeal",
+            label: "Punishment Appeal",
             description: "Appeal your punishment",
-            emoji: "<a:disclaimer_a:1507787788526026852>",
+            emoji: "⚖️",
             value: "appeal"
           }
         ]);
@@ -2137,11 +1595,11 @@ Your support helps keep the server alive, balanced, and growing for the entire c
       let isBotGame = type === "s";
 
       if (isBotGame) {
-        player2 = { id: "bot", username: "Eternal Bot", tag: "Eternal Bot" };
+        player2 = { id: "bot", username: "Bot AI", tag: "Bot AI" };
       } else {
         player2 = interaction.options.getUser("opponent");
         if (!player2 || player2.bot || player2.id === player1.id) {
-          return interaction.reply({ content: "<:incorrect:1518250261502754989> Please mention a valid player to challenge!", ephemeral: true });
+          return interaction.reply({ content: "❌ Please mention a valid player to challenge!", ephemeral: true });
         }
       }
 
@@ -2255,7 +1713,7 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       collector.on("collect", async (i) => {
         if (i.user.id !== turn) {
-          return i.reply({ content: "<:incorrect:1518250261502754989> It is not your turn!", ephemeral: true });
+          return i.reply({ content: "❌ It is not your turn!", ephemeral: true });
         }
 
         const index = parseInt(i.customId.split("_")[1]);
@@ -2300,13 +1758,13 @@ Your support helps keep the server alive, balanced, and growing for the entire c
         });
 
         if (reason === "❌") {
-          await gameMessage.edit({ content: `<a:twinkle_twinkle:1507788149030392000> **Game Over!** ${player1} (X) won the match!`, components: disabledRows }).catch(() => {});
+          await gameMessage.edit({ content: `🎉 **Game Over!** ${player1} (X) won the match!`, components: disabledRows }).catch(() => {});
         } else if (reason === "⭕") {
-          await gameMessage.edit({ content: `<a:twinkle_twinkle:1507788149030392000> **Game Over!** ${isBotGame ? player2.username : player2} (O) won the match!`, components: disabledRows }).catch(() => {});
+          await gameMessage.edit({ content: `🎉 **Game Over!** ${isBotGame ? player2.username : player2} (O) won the match!`, components: disabledRows }).catch(() => {});
         } else if (reason === "tie") {
-          await gameMessage.edit({ content: `<:yummm:1509900502924529684> **Game Over!** It's a tie match!`, components: disabledRows }).catch(() => {});
+          await gameMessage.edit({ content: `🤝 **Game Over!** It's a draw!`, components: disabledRows }).catch(() => {});
         } else {
-          await gameMessage.edit({ content: `<a:disclaimer_a:1507787788526026852> **Game Over!** Game timed out because a player took longer than 15 minutes to move.`, components: disabledRows }).catch(() => {});
+          await gameMessage.edit({ content: `⚠️ **Game Over!** Match timed out.`, components: disabledRows }).catch(() => {});
         }
       });
       return;
@@ -2322,8 +1780,8 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       const startEmbed = new EmbedBuilder()
         .setColor(0x8600FF)
-        .setTitle("<a:magic_book:1507790392945410299> Wordle Game Initialized!")
-        .setDescription(`I've picked a secret **5-letter word**. You have **6 tries** to guess it right!\n\n⏳ You have **15 minutes** to submit each guess. Type your 5-letter words below!`)
+        .setTitle("📝 Wordle Game Initialized!")
+        .setDescription(`I've picked a secret **5-letter word**. You have **6 tries** to guess it!\n\nType your 5-letter guesses in this channel.`)
         .setFooter({ text: `Requested by ${interaction.user.username}` })
         .setTimestamp();
 
@@ -2338,7 +1796,7 @@ Your support helps keep the server alive, balanced, and growing for the entire c
         const guess = m.content.toLowerCase().trim();
 
         if (guess.length !== 5) {
-          return m.reply("<a:disclaimer_a:1507787788526026852> Your guess must be exactly **5 letters** long!").then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
+          return m.reply("⚠️ Your guess must be exactly **5 letters** long!").then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
         }
 
         attempts++;
@@ -2364,8 +1822,8 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
         const statusEmbed = new EmbedBuilder()
           .setColor(0x8600FF)
-          .setTitle("<a:magic_book:1507790392945410299> Wordle Tracker")
-          .setDescription(gameBoard.join("\n") + "\n\n⏳ *Timer reset! 15 minutes left for your next guess.*")
+          .setTitle("📝 Wordle Tracker")
+          .setDescription(gameBoard.join("\n") + "\n\n⏳ *15 minutes left for your next guess.*")
           .setFooter({ text: `Attempt ${attempts}/${maxAttempts}` })
           .setTimestamp();
 
@@ -2380,11 +1838,11 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       collector.on("end", async (collected, reason) => {
         if (reason === "win") {
-          interaction.channel.send(`<a:twinkle_twinkle:1507788149030392000> Congratulations ${interaction.user}! You guessed the correct word **${targetWord.toUpperCase()}** in ${attempts} tries!`);
+          interaction.channel.send(`🎉 Congratulations ${interaction.user}! You guessed the secret word **${targetWord.toUpperCase()}** in ${attempts} tries!`);
         } else if (reason === "lose") {
-          interaction.channel.send(`<:incorrect:1518250261502754989> Game Over ${interaction.user}! You've run out of tries. The secret word was **${targetWord.toUpperCase()}**.`);
+          interaction.channel.send(`❌ Game Over ${interaction.user}! The secret word was **${targetWord.toUpperCase()}**.`);
         } else {
-          interaction.channel.send(`<a:disclaimer_a:1507787788526026852> ${interaction.user}, your Wordle session timed out because you took longer than 15 minutes to guess.`);
+          interaction.channel.send(`⚠️ ${interaction.user}, your Wordle session timed out.`);
         }
       });
       return;
@@ -2397,8 +1855,8 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       const startEmbed = new EmbedBuilder()
         .setColor(0x8600FF)
-        .setTitle("<a:arrow:1507782135212150845> Guess the Number!")
-        .setDescription("I have chosen a secret number between **1 and 10000**.\n\nType your guesses directly into this channel. You have **15 minutes** to submit each guess!")
+        .setTitle("🔢 Guess the Number!")
+        .setDescription("I have picked a secret number between **1 and 10000**.\n\nType your guesses directly into this channel!")
         .setFooter({ text: `Player: ${interaction.user.username}` })
         .setTimestamp();
 
@@ -2419,17 +1877,17 @@ Your support helps keep the server alive, balanced, and growing for the entire c
         if (guess === targetNumber) {
           collector.stop("win");
         } else if (guess > targetNumber) {
-          await m.reply(`<a:red_arrow:1507787736554410126> **${guess}** is **too high**! Try a lower number. *(Attempt: ${attempts})*`).catch(() => {});
+          await m.reply(`🔻 **${guess}** is **too high**! Try lower. *(Attempt: ${attempts})*`).catch(() => {});
         } else {
-          await m.reply(`<a:red_arrow:1507787736554410126> **${guess}** is **too low**! Try a higher number. *(Attempt: ${attempts})*`).catch(() => {});
+          await m.reply(`🔺 **${guess}** is **too low**! Try higher. *(Attempt: ${attempts})*`).catch(() => {});
         }
       });
 
       collector.on("end", async (collected, reason) => {
         if (reason === "win") {
-          interaction.channel.send(`<a:twinkle_twinkle:1507788149030392000> **Congratulations ${interaction.user}!** You guessed the correct number **${targetNumber}** in **${attempts}** attempts!`);
+          interaction.channel.send(`🎉 **Congratulations ${interaction.user}!** You found the correct number **${targetNumber}** in **${attempts}** attempts!`);
         } else {
-          interaction.channel.send(`<a:disclaimer_a:1507787788526026852> ${interaction.user}, your Guess the Number session timed out because you took longer than 15 minutes. The secret number was **${targetNumber}**.`);
+          interaction.channel.send(`⚠️ ${interaction.user}, session timed out. The secret number was **${targetNumber}**.`);
         }
       });
       return;
@@ -2480,7 +1938,7 @@ Your support helps keep the server alive, balanced, and growing for the entire c
         .setTitle("🐍 Retro Snake Game")
         .setDescription(drawBoard())
         .addFields({ name: "🏆 Score", value: `**${score}**`, inline: true })
-        .setFooter({ text: "Click the buttons below to control your snake!" })
+        .setFooter({ text: "Use buttons below to control the snake!" })
         .setTimestamp();
 
       const controlRow = new ActionRowBuilder().addComponents(
@@ -2564,18 +2022,18 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
         const finalEmbed = new EmbedBuilder()
           .setColor(reason === "win" ? 0x57F287 : 0xED4245)
-          .setTitle(reason === "win" ? "<a:crown_a:1507791684208033842> Flawless Victory!" : "<:blue_shit:1508551560945209415> Game Over!")
-          .addFields({ name: "<a:magic_book:1507790392945410299> Final Score", value: `**${score}** points`, inline: true })
+          .setTitle(reason === "win" ? "👑 Flawless Victory!" : "💀 Game Over!")
+          .addFields({ name: "Final Score", value: `**${score}** points`, inline: true })
           .setTimestamp();
 
         if (reason === "dead") {
-          finalEmbed.setDescription(`You crashed into a wall or bit your own tail!\n\n**Final Grid:**\n${drawBoard()}`);
+          finalEmbed.setDescription(`You hit a wall or crashed into your tail!\n\n**Final Grid:**\n${drawBoard()}`);
         } else if (reason === "stopped") {
-          finalEmbed.setDescription(`The game was manually ended by the user.\n\n**Final Grid:**\n${drawBoard()}`);
+          finalEmbed.setDescription(`Game was ended manually.\n\n**Final Grid:**\n${drawBoard()}`);
         } else if (reason === "win") {
-          finalEmbed.setDescription("Incredible! You have completely filled up the snake arena grid!");
+          finalEmbed.setDescription("Impressive! You filled the entire snake grid!");
         } else {
-          finalEmbed.setDescription("The match timed out due to 15 minutes of inactivity.");
+          finalEmbed.setDescription("Game timed out due to inactivity.");
         }
 
         await gameMessage.edit({
@@ -2585,8 +2043,8 @@ Your support helps keep the server alive, balanced, and growing for the entire c
       });
       return;
     }
-      
- /* --- MULTI-CATEGORY LEADERBOARD SYSTEM --- */
+
+    /* --- MULTI-CATEGORY LEADERBOARD SYSTEM --- */
     if (commandName === "leaderboard") {
       const selectedType = interaction.options.getString("type") || "levels";
 
@@ -2604,15 +2062,15 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
           return new EmbedBuilder()
             .setColor(0x8600FF)
-            .setTitle("⭐ Eternal SMP • Level Leaderboard")
+            .setTitle("⭐ Level Leaderboard")
             .setDescription(
               "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
               desc + "\n" +
               "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-              "💬 *Chat in text channels to earn XP and climb the ranks!*"
+              "💬 *Chat in text channels to earn XP and climb the rankings!*"
             )
             .setImage(BANNER)
-            .setFooter({ text: "Eternal SMP Level Ranking" })
+            .setFooter({ text: "Level Rankings" })
             .setTimestamp();
         }
 
@@ -2628,20 +2086,19 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
           return new EmbedBuilder()
             .setColor(0x57F287)
-            .setTitle("📨 Eternal SMP • Invite Leaderboard")
+            .setTitle("📨 Invite Leaderboard")
             .setDescription(
               "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
               desc + "\n" +
               "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-              "👥 *Invite your friends to the server to climb the board!*"
+              "👥 *Invite members to the server to climb the rankings!*"
             )
             .setImage(BANNER)
-            .setFooter({ text: "Eternal SMP Invite Ranking" })
+            .setFooter({ text: "Invite Rankings" })
             .setTimestamp();
         }
 
         if (type === "honor") {
-          // Filters users with 0 warnings, 0 mutes, and 0 bans
           const cleanUsers = Object.entries(levels)
             .filter(([id]) => {
               const hasWarns = warnings[id] && warnings[id].length > 0;
@@ -2658,15 +2115,15 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
           return new EmbedBuilder()
             .setColor(0x3BA55C)
-            .setTitle("🛡️ Eternal SMP • Honor Roll (Zero Violations)")
+            .setTitle("🛡️ Honor Roll (Zero Violations)")
             .setDescription(
               "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
               desc + "\n" +
               "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-              "✨ *Awarded to our active players who maintain **0 warnings, 0 mutes, and 0 bans**!*"
+              "✨ *Awarded to active users with **0 warnings, 0 mutes, and 0 bans**!*"
             )
             .setImage(BANNER)
-            .setFooter({ text: "Eternal SMP Clean Standing" })
+            .setFooter({ text: "Clean Standing" })
             .setTimestamp();
         }
       }
@@ -2702,7 +2159,7 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       const collector = replyMsg.createMessageComponentCollector({
         filter: (i) => i.customId.startsWith("lb_"),
-        time: 5 * 60 * 1000 // Buttons active for 5 minutes
+        time: 5 * 60 * 1000
       });
 
       collector.on("collect", async (btnInt) => {
@@ -2722,17 +2179,16 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       return;
     }     
-      
+
   }
 
-/* =========================
-      SELECT MENU TICKETS
-  ========================= */
+  /* =========================================================
+     13. SELECT MENU TICKETS
+  ========================================================= */
   if (interaction.isStringSelectMenu()) {
     if (interaction.customId === "ticket_menu") {
       const type = interaction.values[0];
 
-      // Base overwrites: Hide from @everyone, allow ticket opener and the bot
       const permissionOverwrites = [
         {
           id: interaction.guild.id,
@@ -2757,7 +2213,6 @@ Your support helps keep the server alive, balanced, and growing for the entire c
         }
       ];
 
-      // Safely add staff roles/members ONLY if they exist in the server cache
       for (const id of STAFF_USER_IDS) {
         const target = interaction.guild.roles.cache.get(id) || interaction.guild.members.cache.get(id);
         if (target) {
@@ -2782,12 +2237,12 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       const embed = new EmbedBuilder()
         .setColor(0x8600FF)
-        .setTitle("🎫 Eternal SMP Support Ticket")
+        .setTitle("🎫 Support Ticket")
         .setDescription(
           `Hello ${interaction.user}!\n\n` +
           `**Category:** \`${type.toUpperCase()}\`\n` +
           `**Status:** 🟡 Unclaimed\n\n` +
-          `Please describe your issue or inquiry in detail.\nA staff member will assist you shortly.`
+          `Please explain your query in detail.\nA staff member will assist you shortly.`
         )
         .setImage(BANNER)
         .setTimestamp();
@@ -2806,21 +2261,21 @@ Your support helps keep the server alive, balanced, and growing for the entire c
       );
 
       await channel.send({
-        content: `${interaction.user} Welcome! Staff will be with you soon.`,
+        content: `${interaction.user} Welcome! Staff will be with you shortly.`,
         embeds: [embed],
         components: [row]
       });
 
       return interaction.reply({
-        content: `<a:verify_a:1508071382704193616> Ticket created: ${channel}`,
+        content: `✅ Ticket created: ${channel}`,
         ephemeral: true
       });
     }
   }
 
-  /* =========================
-      BUTTON INTERACTIONS
-  ========================= */
+  /* =========================================================
+     14. BUTTON INTERACTIONS
+  ========================================================= */
   if (interaction.isButton()) {
 
     /* --- CLAIM TICKET (STAFF ONLY) --- */
@@ -3129,7 +2584,7 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 <body>
   <div class="top-bar">
     <div class="top-title"><span class="tag">#</span> ${escapeHtml(interaction.channel.name)}</div>
-    <div style="font-size: 13px; color: #949ba4;">Eternal SMP Archive</div>
+    <div style="font-size: 13px; color: #949ba4;">Ticket Archive</div>
   </div>
 
   <div class="content-area">
@@ -3176,7 +2631,7 @@ Your support helps keep the server alive, balanced, and growing for the entire c
               inline: false
             }
           )
-          .setFooter({ text: "Powered by Eternal SMP" })
+          .setFooter({ text: "Ticket System" })
           .setTimestamp();
 
         const row = new ActionRowBuilder();
@@ -3207,7 +2662,7 @@ Your support helps keep the server alive, balanced, and growing for the entire c
               inline: false
             }
           )
-          .setFooter({ text: "Powered by Eternal SMP" })
+          .setFooter({ text: "Ticket System" })
           .setTimestamp();
 
         const dmRow = new ActionRowBuilder();
@@ -3248,10 +2703,10 @@ Your support helps keep the server alive, balanced, and growing for the entire c
       const userId = interaction.user.id;
       if (gw.entries.includes(userId)) {
         gw.entries = gw.entries.filter((id) => id !== userId);
-        await interaction.reply({ content: "<:incorrect:1518250261502754989> You left the giveaway.", ephemeral: true });
+        await interaction.reply({ content: "❌ You left the giveaway.", ephemeral: true });
       } else {
         gw.entries.push(userId);
-        await interaction.reply({ content: "<:tik:1518250029695893525> You entered the giveaway! Good luck!", ephemeral: true });
+        await interaction.reply({ content: "✅ You entered the giveaway! Good luck!", ephemeral: true });
       }
 
       saveGiveaways();
@@ -3268,53 +2723,12 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       return interaction.message.edit({ embeds: [updatedEmbed], components: [updatedRow] }).catch(() => {});
     }
-
-    /* --- PAYMENT BUTTONS --- */
-    if (interaction.customId === "pay_bkash") {
-      const embed = new EmbedBuilder()
-        .setColor(0xE2136E)
-        .setTitle("📱 bKash Payment Details")
-        .setDescription(
-          "**Number (Personal):**\n```01741644334```\n" +
-          "**Number (Agent / Personal):**\n```01768166414```\n\n" +
-          "Send payment to the number above, then submit your **TrxID** or screenshot in a ticket to confirm."
-        )
-        .setFooter({ text: "Powered by Eternal SMP" });
-
-      return interaction.reply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (interaction.customId === "pay_nagad") {
-      const embed = new EmbedBuilder()
-        .setColor(0xF7941D)
-        .setTitle("📱 Nagad Payment Details")
-        .setDescription(
-          "**Number (Personal):**\n```01741644334```\n\n" +
-          "Send payment to the number above, then submit your **TrxID** or screenshot in a ticket to confirm."
-        )
-        .setFooter({ text: "Powered by Eternal SMP" });
-
-      return interaction.reply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (interaction.customId === "pay_ltc") {
-      const embed = new EmbedBuilder()
-        .setColor(0x345D9D)
-        .setTitle("⚡ Litecoin (LTC) Payment Details")
-        .setDescription(
-          "**LTC Address:**\n```ltc1qplaceholderaddresshere```\n\n" +
-          "Send exact amount, then submit your transaction hash or screenshot in a ticket to confirm."
-        )
-        .setFooter({ text: "Powered by Eternal SMP" });
-
-      return interaction.reply({ embeds: [embed], ephemeral: true });
-    }
   }
 });
 
-/* =========================
-   INVITE TRACKING
-========================= */
+/* =========================================================
+   15. INVITE TRACKING: MEMBER JOIN
+========================================================= */
 client.on("guildMemberAdd", async (member) => {
   const guildInvites = await member.guild.invites.fetch().catch(() => {});
   if (!guildInvites) return;
@@ -3367,388 +2781,3 @@ client.on("guildMemberAdd", async (member) => {
   });
 
   const logChannel = client.channels.cache.get(INVITE_LOG_CHANNEL_ID);
-  if (logChannel) {
-    const inviterUser = client.users.cache.get(inviterId) || `<@${inviterId}>`;
-    logChannel.send(
-      `👤 ${inviterUser} invited **${member.user.tag}** (${member}) to the server and now has **${data.current}** invite(s)! ${isFake ? "<a:disclaimer_a:1507787788526026852> *(Suspected Fake Account)*" : ""}`
-    ).catch(console.error);
-  }
-
-  saveInvites();
-});
-
-/* =========================
-   INVITE TRACKING REMOVE
-========================= */
-client.on("guildMemberRemove", async (member) => {
-  const memberId = member.id || member.user?.id;
-  if (!memberId) return;
-
-  for (const inviterId in invites) {
-    if (!invites[inviterId]) continue;
-
-    const data = invites[inviterId];
-    if (!Array.isArray(data.history)) continue;
-
-    const index = data.history.findIndex(
-      h => String(h.user) === String(memberId)
-    );
-
-    if (index !== -1) {
-      const record = data.history[index];
-
-      if (record.type === "real") {
-        data.current = Math.max(0, (data.current || 0) - 1);
-        data.left = (data.left || 0) + 1;
-      }
-
-      if (record.type === "fake") {
-        data.fake = Math.max(0, (data.fake || 0) - 1);
-        data.left = (data.left || 0) + 1;
-      }
-
-      const logChannel = client.channels.cache.get(INVITE_LOG_CHANNEL_ID);
-      if (logChannel) {
-        const username = member.user?.tag || member.displayName || "An unknown user";
-        logChannel.send(
-          `<:incorrect:1518250261502754989> **${username}** left the server. They were invited by <@${inviterId}>, whose remaining invite count is now **${data.current}**.`
-        ).catch(console.error);
-      }
-
-      data.history.splice(index, 1);
-      break;
-    }
-  }
-
-  saveInvites();
-});
-
-/* =========================
-   WELCOME
-========================= */
-client.on("guildMemberAdd", async (member) => {
-  const channel = await client.channels
-    .fetch(WELCOME_CHANNEL_ID)
-    .catch(() => null);
-
-  if (!channel) return;
-
-  await channel.send(`welcome, ${member}!`);
-
-  const memberCount = member.guild.memberCount;
-
-  const embed = new EmbedBuilder()
-    .setColor(0x8600FF)
-    .setAuthor({
-      name: member.user.username,
-      iconURL: member.user.displayAvatarURL()
-    })
-    .setTitle("🎉 Welcome to Eternal SMP!")
-    .setDescription(
-      `DONT FORGET TO CHECK OUT!\n\n` +
-      `💬 **[Chats](https://discord.com/channels/1504100985197301802/1504100985646350485)**\n` +
-      `🎭 **[Roles](https://discord.com/channels/1504100985197301802/1504127493131469000)**\n` +
-      `📜 **[Rules](https://discord.com/channels/1504100985197301802/1504100985646350480)**\n` +
-      `📢 **[Announcements](https://discord.com/channels/1504100985197301802/1504100985646350481)**\n` +
-      `⚖️ **[In Game Rules](https://discord.com/channels/1504100985197301802/1504100986086490157)**\n` +
-      `⚖️ **[Punishment System](https://discord.com/channels/1504100985197301802/1508164377860116561)**\n` +
-      `📖 **[Terms And Condition](https://discord.com/channels/1504100985197301802/1506543092126191726)**\n` +
-      `🎫 **[Ticket](https://discord.com/channels/1504100985197301802/1504121282822934670)**\n\n` +
-      `✨ We hope you enjoy your stay!`
-    )
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setImage(BANNER)
-    .setFooter({
-      text: `you are our ${memberCount}th member!`
-    })
-    .setTimestamp();
-
-  channel.send({ embeds: [embed] }).catch(() => {});
-});
-
-/* =========================
-   GOODBYE
-========================= */
-client.on("guildMemberRemove", async (member) => {
-  console.log(`${member.user.tag} left the server`);
-
-  const channel = await client.channels
-    .fetch(GOODBYE_CHANNEL_ID)
-    .catch(console.error);
-
-  if (!channel) return;
-
-  channel.send({
-    content: `oh no... bye, ${member.user.username}`
-  }).catch(console.error);
-
-  const embed = new EmbedBuilder()
-    .setColor(0xED4245)
-    .setAuthor({
-      name: member.user.username,
-      iconURL: member.user.displayAvatarURL({ dynamic: true })
-    })
-    .setTitle("👋 Goodbye from Eternal SMP, We had a good time with you.")
-    .setDescription(
-      `${member.user.username} has left Eternal SMP...\n\n` +
-      "💔 We're sad to see you go\n" +
-      "🎮 Hope you enjoyed your time here\n" +
-      "🌍 You're always welcome back!"
-    )
-    .setThumbnail(
-      member.user.displayAvatarURL({ dynamic: true })
-    )
-    .setImage(BANNER)
-    .setFooter({
-      text: `we now have ${member.guild.memberCount} members...`
-    })
-    .setTimestamp();
-
-  channel.send({
-    embeds: [embed]
-  }).catch(console.error);
-});
-
-/* =========================
-   SERVER BOOST MESSAGE
-========================= */
-client.on("guildMemberUpdate", async (oldMember, newMember) => {
-  if (
-    !oldMember.premiumSince &&
-    newMember.premiumSince
-  ) {
-    const channel = await client.channels
-      .fetch(BOOST_CHANNEL_ID)
-      .catch(() => null);
-
-    if (!channel) return;
-
-    const embed = new EmbedBuilder()
-      .setColor(0xFF73FA)
-      .setTitle("🚀 New Server Boost!")
-      .setDescription(
-        `💖 Thank you so much ${newMember} for boosting **Eternal SMP**!\n\n` +
-        `Your support helps us improve the server, unlock new perks, and keep the community growing stronger every day.\n\n` +
-        `✨ We truly appreciate your support and generosity!\n\n` +
-        `🔥 Enjoy your booster perks and thank you for being part of Eternal SMP!`
-      )
-      .setThumbnail(
-        newMember.user.displayAvatarURL({ dynamic: true })
-      )
-      .setImage(BANNER)
-      .setFooter({
-        text: "Eternal SMP Booster System"
-      })
-      .setTimestamp();
-
-    channel.send({
-      content: `🎉 ${newMember} just boosted the server!`,
-      embeds: [embed]
-    });
-  }
-});
-
-/* =========================
-   JOIN TO CREATE / TEMP VOICE
-========================= */
-client.on("voiceStateUpdate", async (oldState, newState) => {
-  const { member, guild } = newState;
-
-  // 1. User joins the "Join to Create" channel
-  if (newState.channelId === JOIN_TO_CREATE_CHANNEL_ID) {
-    try {
-      const parentCategory = newState.channel.parent;
-
-      // Creates the voice channel right under the creator channel
-      const tempChannel = await guild.channels.create({
-        name: `🔊・${member.displayName}'s VC`,
-        type: ChannelType.GuildVoice,
-        parent: parentCategory || null,
-        position: newState.channel.rawPosition + 1,
-        permissionOverwrites: [
-          {
-            id: guild.id,
-            allow: [PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.ViewChannel]
-          },
-          {
-            id: member.id,
-            allow: [
-              PermissionsBitField.Flags.Connect,
-              PermissionsBitField.Flags.ManageChannels,
-              PermissionsBitField.Flags.MoveMembers,
-              PermissionsBitField.Flags.MuteMembers
-            ]
-          }
-        ]
-      });
-
-      // Track channel ID
-      activeTempVoiceChannels.add(tempChannel.id);
-
-      // Move member into their newly created temporary channel
-      await newState.setChannel(tempChannel);
-    } catch (err) {
-      console.error("Error creating temporary voice channel:", err);
-    }
-  }
-
-  // 2. Member leaves a temporary voice channel -> Delete if empty
-  if (oldState.channelId && activeTempVoiceChannels.has(oldState.channelId)) {
-    const channel = oldState.channel;
-    if (channel && channel.members.size === 0) {
-      activeTempVoiceChannels.delete(channel.id);
-      await channel.delete().catch(() => {});
-    }
-  }
-});
-
-/* =========================
-   ANTI-NUKE EVENT LISTENERS
-========================= */
-
-// 1. Mass Channel Deletion Detection
-client.on("channelDelete", async (channel) => {
-  if (!channel.guild) return;
-
-  try {
-    const fetchedLogs = await channel.guild.fetchAuditLogs({
-      limit: 1,
-      type: AuditLogEvent.ChannelDelete
-    });
-    const entry = fetchedLogs.entries.first();
-    if (!entry || !entry.executor) return;
-
-    // Confirm the deletion happened within the last 5 seconds
-    if (Date.now() - entry.createdTimestamp > 5000) return;
-
-    const count = recordNukeAction(entry.executor.id, "channelDeletes");
-    if (count >= NUKE_LIMITS.CHANNEL_DELETE) {
-      await triggerNukeDefense(channel.guild, entry.executor, "Channel Deletions", count);
-    }
-  } catch (err) {
-    console.error("Error inspecting channelDelete audit log:", err);
-  }
-});
-
-// 2. Mass Role Deletion Detection
-client.on("roleDelete", async (role) => {
-  if (!role.guild) return;
-
-  try {
-    const fetchedLogs = await role.guild.fetchAuditLogs({
-      limit: 1,
-      type: AuditLogEvent.RoleDelete
-    });
-    const entry = fetchedLogs.entries.first();
-    if (!entry || !entry.executor) return;
-
-    if (Date.now() - entry.createdTimestamp > 5000) return;
-
-    const count = recordNukeAction(entry.executor.id, "roleDeletes");
-    if (count >= NUKE_LIMITS.ROLE_DELETE) {
-      await triggerNukeDefense(role.guild, entry.executor, "Role Deletions", count);
-    }
-  } catch (err) {
-    console.error("Error inspecting roleDelete audit log:", err);
-  }
-});
-
-// 3. Mass Member Ban Detection
-client.on("guildBanAdd", async (ban) => {
-  try {
-    const fetchedLogs = await ban.guild.fetchAuditLogs({
-      limit: 1,
-      type: AuditLogEvent.MemberBanAdd
-    });
-    const entry = fetchedLogs.entries.first();
-    if (!entry || !entry.executor) return;
-
-    if (Date.now() - entry.createdTimestamp > 5000) return;
-
-    const count = recordNukeAction(entry.executor.id, "memberBans");
-    if (count >= NUKE_LIMITS.MEMBER_BAN) {
-      await triggerNukeDefense(ban.guild, entry.executor, "Mass Member Bans", count);
-    }
-  } catch (err) {
-    console.error("Error inspecting guildBanAdd audit log:", err);
-  }
-});
-
-/* =========================
-   AUDIT LOGS: MESSAGE DELETE
-========================= */
-client.on("messageDelete", async (message) => {
-  if (!message.guild || message.author?.bot) return;
-
-  // Filter for specific channel if configured
-  if (MONITORED_CHANNEL_ID && message.channel.id !== MONITORED_CHANNEL_ID) return;
-
-  const logChannel = message.guild.channels.cache.get(AUDIT_LOG_CHANNEL_ID);
-  if (!logChannel) return;
-
-  const content = message.content ? message.content.slice(0, 1000) : "*No text content (Embed or Attachment only)*";
-  const attachments = message.attachments.size > 0
-    ? message.attachments.map((a) => a.url).join("\n")
-    : null;
-
-  const deleteEmbed = new EmbedBuilder()
-    .setColor(0xED4245)
-    .setAuthor({
-      name: message.author?.tag || "Unknown User",
-      iconURL: message.author?.displayAvatarURL({ dynamic: true })
-    })
-    .setTitle("🗑️ Message Deleted")
-    .setDescription(
-      `**Author:** ${message.author || "Unknown"} (\`${message.author?.id || "N/A"}\`)\n` +
-      `**Channel:** ${message.channel} (\`${message.channel.id}\`)\n\n` +
-      `**Content:**\n\`\`\`\n${content}\n\`\`\`` +
-      (attachments ? `\n**Attachments:**\n${attachments}` : "")
-    )
-    .setFooter({ text: `Message ID: ${message.id}` })
-    .setTimestamp();
-
-  await logChannel.send({ embeds: [deleteEmbed] }).catch(() => {});
-});
-
-/* =========================
-   AUDIT LOGS: MESSAGE EDIT
-========================= */
-client.on("messageUpdate", async (oldMessage, newMessage) => {
-  if (!newMessage.guild || newMessage.author?.bot) return;
-
-  // Filter for specific channel if configured
-  if (MONITORED_CHANNEL_ID && newMessage.channel.id !== MONITORED_CHANNEL_ID) return;
-
-  // Ignore system updates (e.g., Discord generating link previews)
-  if (oldMessage.content === newMessage.content) return;
-
-  const logChannel = newMessage.guild.channels.cache.get(AUDIT_LOG_CHANNEL_ID);
-  if (!logChannel) return;
-
-  const oldText = oldMessage.content ? oldMessage.content.slice(0, 900) : "*Original content uncached*";
-  const newText = newMessage.content ? newMessage.content.slice(0, 900) : "*Empty content*";
-
-  const editEmbed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setAuthor({
-      name: newMessage.author.tag,
-      iconURL: newMessage.author.displayAvatarURL({ dynamic: true })
-    })
-    .setTitle("✏️ Message Edited")
-    .setDescription(
-      `**Author:** ${newMessage.author} (\`${newMessage.author.id}\`)\n` +
-      `**Channel:** ${newMessage.channel} (\`${newMessage.channel.id}\`)\n` +
-      `**Jump to Message:** [Click Here](${newMessage.url})\n\n` +
-      `**Before:**\n\`\`\`\n${oldText}\n\`\`\`\n` +
-      `**After:**\n\`\`\`\n${newText}\n\`\`\``
-    )
-    .setFooter({ text: `Message ID: ${newMessage.id}` })
-    .setTimestamp();
-
-  await logChannel.send({ embeds: [editEmbed] }).catch(() => {});
-});
-
-/* =========================
-   LOGIN
-========================= */
-client.login(process.env.DISCORD_TOKEN);
