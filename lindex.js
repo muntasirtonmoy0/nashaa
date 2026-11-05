@@ -1504,61 +1504,6 @@ client.on("interactionCreate", async (interaction) => {
         content: `🎉 **New Winner Rerolled!** Congratulations <@${newWinner}>! You won **${gw.prize}**!`
       });
     }
-
-/* --- SERVER IP & CONNECTION DETAILS --- */
-    if (commandName === "ip") {
-      const embed = new EmbedBuilder()
-        .setColor(0x8600FF)
-        .setAuthor({
-          name: "Eternal SMP • Server Connection",
-          iconURL: interaction.guild.iconURL() || THUMBNAIL
-        })
-        .setTitle("<a:fire_a0:1507790340067950794> Join the Realm of Eternal SMP")
-        .setDescription(
-          "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-          "### 💻 Java Edition (PC)\n" +
-          "**Server IP:**\n" +
-          "```play.eternal-smp.pro```\n" +
-          "**Port:**\n" +
-          "```12003```\n" +
-          "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-          "### 📱 Bedrock Edition (PE / Console / Win10)\n" +
-          "**Server IP:**\n" +
-          "```play.eternal-smp.pro:12003```\n" +
-          "**Port:**\n" +
-          "```12003```\n" +
-          "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-          "### 🌐 Official Links\n" +
-          "• **Website:** [ETERNAL SMP WEBSITE](https://www.eternal-smp.pro/)\n" +
-          "• **Store:** [ETERNAL SMP STORE](https://www.eternal-smp.pro/shop.html)\n" +
-          "• **Leaderboard:** [ETERNAL SMP LEADERBOARD](https://www.eternal-smp.pro/leaderboard.html)\n" +
-          "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        )
-        .setImage(BANNER)
-        .setFooter({ text: "Compatible with Minecraft 1.20 - 26.2" })
-        .setTimestamp();
-
-      // Clickable external web link buttons
-      const linkRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setLabel("Official Website")
-          .setStyle(ButtonStyle.Link)
-          .setEmoji("🌐")
-          .setURL("https://www.eternal-smp.pro/"),
-        new ButtonBuilder()
-          .setLabel("Webstore")
-          .setStyle(ButtonStyle.Link)
-          .setEmoji("🛒")
-          .setURL("https://www.eternal-smp.pro/shop.html"),
-        new ButtonBuilder()
-          .setLabel("Gallery")
-          .setStyle(ButtonStyle.Link)
-          .setEmoji("🏞️")
-          .setURL("https://www.eternal-smp.pro/gallery.html")
-      );
-
-      return interaction.reply({ embeds: [embed], components: [linkRow] });
-    }      
       
     /* --- RULES --- */
     if (commandName === "rules") {
