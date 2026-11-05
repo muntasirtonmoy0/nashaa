@@ -2513,7 +2513,273 @@ Your support helps keep the server alive, balanced, and growing for the entire c
 
       return;
     }
-      
+
+ /* =========================================================
+     VOICE CONTROL PANEL: DROPDOWN MENUS
+  ========================================================= */
+  if (interaction.isStringSelectMenu() && (interaction.customId === "vc_settings_menu" || interaction.customId === "vc_permissions_menu")) {
+    const selected = interaction.values[0];
+    const channel = interaction.member.voice.channel;
+
+    // Check if user is in an active temporary voice channel
+    if (!channel || !activeTempVoiceChannels.has(channel.id)) {
+      return interaction.reply({
+        content: "❌ You must be connected to your temporary voice channel to use this panel!",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    const currentOwnerId = tempVoiceOwners.get(channel.id);
+
+    // --- 1. CLAIM OWNERSHIP ---
+    if (selected === "vc_claim") {
+      if (currentOwnerId === interaction.user.id) {
+        return interaction.reply({ content: "👑 You are already the owner of this voice channel!", flags: MessageFlags.Ephemeral });
+      }
+
+      // Allow claim only if previous owner left the channel
+      const isOwnerStillInVC = channel.members.has(currentOwnerId);
+      if (isOwnerStillInVC) {
+        return interaction.reply({ content: "❌ You cannot claim ownership while the current owner is still inside the channel!", flags: MessageFlags.Ephemeral });
+      }
+
+      tempVoiceOwners.set(channel.id, interaction.user.id);
+      await channel.permissionOverwrites.edit(interaction.user.id, {
+        Connect: true,
+        ManageChannels: true,
+        MoveMembers: true
+      });
+
+      return interaction.reply({
+        content: `👑 ${interaction.user} has successfully claimed ownership of this channel!`
+      });
+    }
+
+    // Enforce owner check for all other actions
+    if (currentOwnerId !== interaction.user.id && !interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return interaction.reply({
+        content: "❌ Only the channel owner can modify channel settings and permissions!",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    // --- 2. PERMISSION CONTROLS ---
+    if (selected === "vc_lock") {
+      await channel.permissionOverwrites.edit(interaction.guild.id, { Connect: false });
+      return interaction.reply({ content: "🔒 **Channel Locked:** Users can no longer join.", flags: MessageFlags.Ephemeral });
+    }
+
+    if (selected === "vc_unlock") {
+      await channel.permissionOverwrites.edit(interaction.guild.id, { Connect: null });
+      return interaction.reply({ content: "🔓 **Channel Unlocked:** Everyone can join.", flags: MessageFlags.Ephemeral });
+    }
+
+    if (selected === "vc_ghost") {
+      await channel.permissionOverwrites.edit(interaction.guild.id, { ViewChannel: false });
+      return interaction.reply({ content: "👻 **Channel Ghosted:** Your channel is now hidden from the server list.", flags: MessageFlags.Ephemeral });
+    }
+
+    if (selected === "vc_unghost") {
+      await channel.permissionOverwrites.edit(interaction.guild.id, { ViewChannel: null });
+      return interaction.reply({ content: "👁️ **Channel Visible:** Your channel is now visible to everyone.", flags: MessageFlags.Ephemeral });
+    }
+
+    // --- 3. USER PICKERS (PERMIT, REJECT, TRANSFER) ---
+    if (selected === "vc_permit") {
+      const userSelect = new UserSelectMenuBuilder()
+        .setCustomId("vc_select_permit")
+        .setPlaceholder("Select a user to permit into this channel")
+        .setMaxValues(1);
+
+      return interaction.reply({
+        content: "Select the member you want to grant access to:",
+        components: [new ActionRowBuilder().addComponents(userSelect)],
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (selected === "vc_reject") {
+      const userSelect = new UserSelectMenuBuilder()
+        .setCustomId("vc_select_reject")
+        .setPlaceholder("Select a user to disconnect / ban from VC")
+        .setMaxValues(1);
+
+      return interaction.reply({
+        content: "Select the member you want to kick and block from this channel:",
+        components: [new ActionRowBuilder().addComponents(userSelect)],
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (selected === "vc_transfer") {
+      const userSelect = new UserSelectMenuBuilder()
+        .setCustomId("vc_select_transfer")
+        .setPlaceholder("Select a user to transfer channel ownership to")
+        .setMaxValues(1);
+
+      return interaction.reply({
+        content: "Select the member who will receive ownership:",
+        components: [new ActionRowBuilder().addComponents(userSelect)],
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    // --- 4. MODALS (NAME, LIMIT, STATUS, BITRATE) ---
+    if (selected === "vc_name") {
+      const modal = new ModalBuilder()
+        .setCustomId("vc_modal_name")
+        .setTitle("Change Channel Name");
+
+      const input = new TextInputBuilder()
+        .setCustomId("name_input")
+        .setLabel("New Channel Name")
+        .setStyle(TextInputStyle.Short)
+        .setValue(channel.name)
+        .setMaxLength(32)
+        .setRequired(true);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      return interaction.showModal(modal);
+    }
+
+    if (selected === "vc_limit") {
+      const modal = new ModalBuilder()
+        .setCustomId("vc_modal_limit")
+        .setTitle("Change User Limit");
+
+      const input = new TextInputBuilder()
+        .setCustomId("limit_input")
+        .setLabel("User Limit (0 - 99, 0 for unlimited)")
+        .setStyle(TextInputStyle.Short)
+        .setValue(String(channel.userLimit || 0))
+        .setMaxLength(2)
+        .setRequired(true);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      return interaction.showModal(modal);
+    }
+
+    if (selected === "vc_status") {
+      const modal = new ModalBuilder()
+        .setCustomId("vc_modal_status")
+        .setTitle("Change Channel Status");
+
+      const input = new TextInputBuilder()
+        .setCustomId("status_input")
+        .setLabel("Voice Channel Status Text")
+        .setStyle(TextInputStyle.Short)
+        .setMaxLength(100)
+        .setRequired(false);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      return interaction.showModal(modal);
+    }
+
+    if (selected === "vc_bitrate") {
+      const modal = new ModalBuilder()
+        .setCustomId("vc_modal_bitrate")
+        .setTitle("Change Channel Bitrate");
+
+      const input = new TextInputBuilder()
+        .setCustomId("bitrate_input")
+        .setLabel("Bitrate in kbps (e.g. 64, 96, 128, 256)")
+        .setStyle(TextInputStyle.Short)
+        .setValue(String(Math.round(channel.bitrate / 1000)))
+        .setMaxLength(3)
+        .setRequired(true);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      return interaction.showModal(modal);
+    }
+  }
+
+  /* =========================================================
+     VOICE CONTROL PANEL: MODAL SUBMISSIONS
+  ========================================================= */
+  if (interaction.isModalSubmit()) {
+    const channel = interaction.member.voice.channel;
+    if (!channel || !activeTempVoiceChannels.has(channel.id)) {
+      return interaction.reply({ content: "❌ You are no longer in this voice channel.", flags: MessageFlags.Ephemeral });
+    }
+
+    if (interaction.customId === "vc_modal_name") {
+      const newName = interaction.fields.getTextInputValue("name_input").trim();
+      await channel.setName(newName).catch(() => {});
+      return interaction.reply({ content: `✅ Channel name updated to: **${newName}**`, flags: MessageFlags.Ephemeral });
+    }
+
+    if (interaction.customId === "vc_modal_limit") {
+      const val = parseInt(interaction.fields.getTextInputValue("limit_input"));
+      if (isNaN(val) || val < 0 || val > 99) {
+        return interaction.reply({ content: "❌ Please enter a valid number between 0 and 99.", flags: MessageFlags.Ephemeral });
+      }
+      await channel.setUserLimit(val).catch(() => {});
+      return interaction.reply({ content: `👥 User limit updated to: **${val === 0 ? "Unlimited" : val}**`, flags: MessageFlags.Ephemeral });
+    }
+
+    if (interaction.customId === "vc_modal_status") {
+      const newStatus = interaction.fields.getTextInputValue("status_input").trim();
+      if (channel.setStatus) {
+        await channel.setStatus(newStatus).catch(() => {});
+      }
+      return interaction.reply({ content: `💬 Status updated to: **${newStatus || "*Cleared*"}**`, flags: MessageFlags.Ephemeral });
+    }
+
+    if (interaction.customId === "vc_modal_bitrate") {
+      const kbps = parseInt(interaction.fields.getTextInputValue("bitrate_input"));
+      if (isNaN(kbps) || kbps < 8 || kbps > 384) {
+        return interaction.reply({ content: "❌ Bitrate must be between 8 and 384 kbps.", flags: MessageFlags.Ephemeral });
+      }
+      await channel.setBitrate(kbps * 1000).catch(err => {
+        return interaction.reply({ content: `❌ Could not set bitrate: ${err.message}`, flags: MessageFlags.Ephemeral });
+      });
+      return interaction.reply({ content: `🎚️ Bitrate updated to: **${kbps} kbps**`, flags: MessageFlags.Ephemeral });
+    }
+  }
+
+  /* =========================================================
+     VOICE CONTROL PANEL: USER SELECT HANDLERS
+  ========================================================= */
+  if (interaction.isUserSelectMenu()) {
+    const channel = interaction.member.voice.channel;
+    if (!channel || !activeTempVoiceChannels.has(channel.id)) {
+      return interaction.reply({ content: "❌ You are no longer in this voice channel.", flags: MessageFlags.Ephemeral });
+    }
+
+    const targetId = interaction.values[0];
+
+    if (interaction.customId === "vc_select_permit") {
+      await channel.permissionOverwrites.edit(targetId, { Connect: true, ViewChannel: true });
+      return interaction.update({ content: `✅ Access granted to <@${targetId}>!`, components: [] });
+    }
+
+    if (interaction.customId === "vc_select_reject") {
+      if (targetId === interaction.user.id) {
+        return interaction.update({ content: "❌ You cannot reject yourself!", components: [] });
+      }
+      const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+      if (targetMember && targetMember.voice.channelId === channel.id) {
+        await targetMember.voice.disconnect().catch(() => {});
+      }
+      await channel.permissionOverwrites.edit(targetId, { Connect: false });
+      return interaction.update({ content: `🚫 <@${targetId}> has been disconnected and blocked from joining.`, components: [] });
+    }
+
+    if (interaction.customId === "vc_select_transfer") {
+      if (targetId === interaction.user.id) {
+        return interaction.update({ content: "❌ You already own this channel!", components: [] });
+      }
+      tempVoiceOwners.set(channel.id, targetId);
+      await channel.permissionOverwrites.edit(targetId, {
+        Connect: true,
+        ManageChannels: true,
+        MoveMembers: true
+      });
+      await interaction.update({ content: `👑 Transferred channel ownership to <@${targetId}>!`, components: [] });
+      return channel.send(`👑 **Channel Ownership Update:** Ownership has been transferred to <@${targetId}>!`).catch(() => {});
+    }
+  }
+    
 /* =========================
       SELECT MENU TICKETS
   ========================= */
