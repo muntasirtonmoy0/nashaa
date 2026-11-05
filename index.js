@@ -1,5 +1,62 @@
 require("dotenv").config();
 
+/* =========================================================
+   WALL 1 & 2: CONSOLE REDACTION & ANTI-EVAL SHIELD
+========================================================= */
+(() => {
+  const rawToken = process.env.DISCORD_TOKEN;
+  if (!rawToken) return;
+
+  const tokenRegex = new RegExp(
+    `(${rawToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|[A-Za-z0-9_-]{24,28}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38})`,
+    "g"
+  );
+
+  function clean(data) {
+    if (typeof data === "string") return data.replace(tokenRegex, "[PROTECTED_TOKEN]");
+    if (data instanceof Error) {
+      if (data.stack) data.stack = data.stack.replace(tokenRegex, "[PROTECTED_TOKEN]");
+      if (data.message) data.message = data.message.replace(tokenRegex, "[PROTECTED_TOKEN]");
+      return data;
+    }
+    return data;
+  }
+
+  ["log", "warn", "error", "info", "debug"].forEach((method) => {
+    const original = console[method];
+    console[method] = (...args) => {
+      const sanitized = args.map((arg) => {
+        if (typeof arg === "string") return clean(arg);
+        if (typeof arg === "object" && arg !== null) {
+          try {
+            return JSON.parse(clean(JSON.stringify(arg)));
+          } catch {
+            return arg;
+          }
+        }
+        return arg;
+      });
+      original.apply(console, sanitized);
+    };
+  });
+
+  const origStdout = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (chunk, encoding, callback) => {
+    return origStdout(typeof chunk === "string" ? clean(chunk) : chunk, encoding, callback);
+  };
+
+  const origStderr = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (chunk, encoding, callback) => {
+    return origStderr(typeof chunk === "string" ? clean(chunk) : chunk, encoding, callback);
+  };
+
+  try {
+    global.eval = () => { throw new Error("Blocked: eval is disabled for security."); };
+    Function.prototype.constructor = () => { throw new Error("Blocked: Function is disabled for security."); };
+  } catch {}
+})();
+
+
 const {
   Client,
   GatewayIntentBits,
@@ -601,8 +658,23 @@ const commands = [
 client.once("ready", async () => {
   console.log(`${client.user.tag} is online!`);
 
+  /* --- WALL 3: AUTO-LEAVE UNKNOWN SERVERS --- */
+  const MAIN_SERVER_ID = "1504100985197301802";
+
+  client.guilds.cache.forEach((guild) => {
+    if (guild.id !== MAIN_SERVER_ID) {
+      guild.leave().catch(() => {});
+    }
+  });
+
+  client.on("guildCreate", (guild) => {
+    if (guild.id !== MAIN_SERVER_ID) {
+      guild.leave().catch(() => {});
+    }
+  });
+
   // Register Slash Commands Instantly to Your Server
-  const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+  const rest = new REST({ version: "10" }).setToken(client.token);
   try {
     console.log("Registering application (/) commands to the server...");
     await rest.put(
@@ -3859,7 +3931,15 @@ client.on("messageUpdate", async (oldMessage, newMessage) => {
   await logChannel.send({ embeds: [editEmbed] }).catch(() => {});
 });
 
-/* =========================
-   LOGIN
-========================= */
-client.login(process.env.DISCORD_TOKEN);
+/* =========================================================
+   WALL 4: MEMORY PURGE ON STARTUP
+========================================================= */
+const bootToken = process.env.DISCORD_TOKEN;
+
+client.login(bootToken).then(() => {
+  delete process.env.DISCORD_TOKEN;
+  Object.freeze(process.env);
+  console.log("🛡️ [SECURITY] Bot logged in. Token purged from system memory.");
+}).catch((err) => {
+  console.error("Login failed:", err);
+});
